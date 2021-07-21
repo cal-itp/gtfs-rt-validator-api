@@ -1,0 +1,4 @@
+data/*
+
+# Vim swapfiles
+.*.sw[po]

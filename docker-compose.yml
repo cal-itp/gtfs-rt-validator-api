@@ -1,0 +1,11 @@
+version: '3'
+
+services:
+  gtfs-rt-validator:
+    build: .
+    environment:
+      GOOGLE_CLOUD_PROJECT: cal-itp-data-infra
+    volumes:
+      - ".:/app"
+      - $HOME/.config/gcloud:/root/.config/gcloud
+
