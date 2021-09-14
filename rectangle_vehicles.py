@@ -1,11 +1,8 @@
 from google.transit import gtfs_realtime_pb2
 from google.protobuf import json_format
 from pathlib import Path
-from glom import glom
 import pandas as pd
 import os
-
-# import pyarrow.parquet as pq
 
 
 def parse_pb(path):
@@ -20,12 +17,15 @@ def parse_pb(path):
 
 def pull_value(x, path):
     """
-    Safe glom for pulling entity values
+    Safe extraction for pulling entity values
     """
-    try:
-        return glom(x, path)
-    except:
-        return None
+    crnt_obj = x
+    for attr in path.split("."):
+        try:
+            crnt_obj = crnt_obj[attr]
+        except KeyError:
+            return None
+    return crnt_obj
 
 
 def get_header_details(x):
