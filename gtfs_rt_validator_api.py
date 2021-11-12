@@ -24,7 +24,7 @@ RT_FILENAME_TEMPLATE="{dt}__{itp_id}__{url_number}__{src_fname}__{dt}.pb"
 N_THREAD_WORKERS = 30
 
 try:
-    JAR_PATH = os.environ.get("GTFS_VALIDATOR_JAR")
+    JAR_PATH = os.environ["GTFS_VALIDATOR_JAR"]
 except KeyError:
     raise Exception("Must set the environment variable GTFS_VALIDATOR_JAR")
 
@@ -49,6 +49,11 @@ def put_file(fs, src, dst):
         lambda: fs.put(src, dst),
         2
     )
+
+def json_to_newline_delimited(in_file, out_file):
+    data = json.load(open(in_file))
+    with open(out_file, "w") as f:
+        f.write("\n".join([json.dumps(record) for record in data]))
 
 # Validation ==================================================================
 
@@ -108,9 +113,10 @@ def validate_gcs_bucket(
         tmp_dir = None
         tmp_dir_name = out_dir
 
-    if not results_bucket.endswith("/"):
+    if results_bucket and not results_bucket.endswith("/"):
         results_bucket = f"{results_bucket}/"
 
+    final_json_dir = Path(tmp_dir_name) / "newline_json"
 
     try:
         print("Fetching data")
@@ -132,22 +138,34 @@ def validate_gcs_bucket(
         print("Validating data")
         validate(f"{dst_path_gtfs}.zip", dst_path_rt, verbose=verbose)
 
+        if results_bucket:
+            # validator stores results as {filename}.results.json
+            print(f"Putting data into results bucket: {results_bucket}")
+
+            # fetch all results files created by the validator
+            all_results = list(Path(dst_path_rt).glob("*.results.json"))
+
+            
+            final_json_dir.mkdir(exist_ok=True)
+            final_files = []
+            for result in all_results:
+                # we appended a final timestamp to the files so that the validator
+                # can use it to order them during validation. here, we remove that
+                # timestamp, so we can use a single wildcard to select, eg..
+                # *trip_updates.results.json
+                result_out = "__".join(result.name.split("__")[:-1])
+
+                json_to_newline_delimited(result, final_json_dir / result_out)
+                final_files.append(final_json_dir / result_out)
+            
+
+            fs.put(final_files, results_bucket)
+
     except Exception as e:
         if isinstance(tmp_dir, TemporaryDirectory):
             tmp_dir.cleanup()
 
         raise e
-
-    if results_bucket:
-        print(f"Putting data into results bucket: {results_bucket}")
-
-        all_results = Path(dst_path_rt).glob("*.results.json")
-
-        with TemporaryDirectory() as res_dir:
-            for res in all_results:
-                shutil.copy(str(res), res_dir)
-
-            fs.put(res_dir, RT_BUCKET_PROCESSED_FOLDER, recursive=True)
 
 
 def download_gtfs_schedule_zip(gtfs_schedule_path, dst_path, fs):
@@ -199,12 +217,10 @@ def download_rt_files(dst_dir, fs=None, date="2021-08-01", glob_path=None):
         to_copy.append([src_path, dst_name])
         out_feeds[(itp_id, url_number)].append(dst_name)
 
-    print(f"Copyting {len(to_copy)} files")
+    print(f"Copying {len(to_copy)} files")
 
     with futures.ThreadPoolExecutor(max_workers=N_THREAD_WORKERS) as pool:
         list(pool.map(lambda args: fs.get(*args), to_copy))
-
-    return out_feeds
 
 
 # Rectangling =================================================================
