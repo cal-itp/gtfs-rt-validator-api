@@ -1,6 +1,22 @@
-## Fetching example data
+# GTFS RT Validator API
 
-TODO
+This library wraps [CUTR-at-USF/gtfs-realtime-validator](https://github.com/CUTR-at-USF/gtfs-realtime-validator),
+to provide the following in python:
+
+* a `validate` function for running validation.
+* a commandline tool for fetching and validating cal-itp realtime.
+
+It relies on setting the `GTFS_VALIDATOR_JAR` environment variable with the path of the RT validator.
+A Dockerfile is provided for ease of use.
+
+## Install
+
+
+## Testing
+
+```shell
+docker-compose run gtfs-rt-validator pytest tests
+```
 
 ## Running validator
 
