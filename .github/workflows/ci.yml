@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+  release:
+    types: [ published ]
+
+jobs:
+  checks:
+    name: "Run Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: google-github-actions/setup-gcloud@master
+        with:
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
+      - run: |
+          docker-compose run gtfs-rt-validator pytest tests
+          
