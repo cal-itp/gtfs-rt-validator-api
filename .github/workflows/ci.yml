@@ -16,10 +16,10 @@ jobs:
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
       - run: |
-        docker-compose run \
-          -v $GOOGLE_APPLICATION_CREDENTIALS:'/gcloud_auth' \
-          -e GOOGLE_APPLICATION_CREDENTIALS='/gcloud_auth'
-          gtfs-rt-validator pytest tests
+          docker-compose run \
+            -v $GOOGLE_APPLICATION_CREDENTIALS:'/gcloud_auth' \
+            -e GOOGLE_APPLICATION_CREDENTIALS='/gcloud_auth' \
+            gtfs-rt-validator pytest tests
           
   build_push:
     name: Package docker image
