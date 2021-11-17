@@ -42,11 +42,17 @@ fs = get_fs()
 
 # creates a file named gtfs_schedule.zip with some zipped GTFS data
 download_gtfs_schedule_zip(
-    "gs://gtfs-data/schedule/2021-09-01T00:00:00+00:00/106_0", "gtfs_schedule"
+    "gs://calitp-py-ci/gtfs-rt-validator-api/gtfs_schedule_126",
+    zip_schedule,
+    fs
 )
 
 # downloads an individual feed's RT files into example_gtfs_rt
-download_rt_files("example_gtfs_rt", fs, glob_path="gs://gtfs-data/rt/2021-09-01T*/106/0/*")
+download_rt_files(
+    dir_rt,
+    fs,
+    "gs://calitp-py-ci/gtfs-rt-validator-api/gtfs_rt_126"
+)
 
 # downloads RT for all feeds into exaple_gtfs_rt_many
 # each feed is a subdirectory of form {calitp_itp_id}/{calitp_url_number}/
@@ -70,12 +76,11 @@ validate_gcs_bucket(
     None,
     "gs://gtfs-data/schedule/2021-09-01T00:00:00+00:00/106_0",
     gtfs_rt_glob_path="gs://gtfs-data/rt/2021-09-01T*/106/0/*",
-    out_dir="test_out_106",
 
     # uncomment to push the resulting validation files up to a gcs bucket.
     # note that the validator produces 1 result file per individual timepoint
     # that it checks
-    # results_bucket="gs://gtfs-data-test/rt-processed/validation",
+    results_bucket="gs://gtfs-data-test/rt-processed/validation",
 
     verbose=True
 )

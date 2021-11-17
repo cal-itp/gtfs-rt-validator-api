@@ -37,3 +37,17 @@ def test_validate_gcs_bucket():
         results_bucket="gs://calitp-py-ci/gtfs-rt-validator-api/test_output"
     )
 
+
+#validate_gcs_bucket(
+#    "cal-itp-data-infra",
+#    None,
+#    "gs://gtfs-data/schedule/2021-09-01T00:00:00+00:00/106_0",
+#    gtfs_rt_glob_path="gs://gtfs-data/rt/2021-09-01T*/106/0/*",
+#
+#    # uncomment to push the resulting validation files up to a gcs bucket.
+#    # note that the validator produces 1 result file per individual timepoint
+#    # that it checks
+#    results_bucket="gs://calitp-py-ci/gtfs-rt-validator-api/test_output_full",
+#
+#    verbose=True
+#)
