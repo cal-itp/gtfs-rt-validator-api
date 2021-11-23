@@ -64,7 +64,7 @@ def gather_results(rt_path):
     raise NotImplementedError()
 
 
-def validate(gtfs_file, rt_path, out_file=None, verbose=False):
+def validate(gtfs_file, rt_path, verbose=False):
 
     if not isinstance(gtfs_file, str):
         raise NotImplementedError("gtfs_file must be a string")
@@ -95,7 +95,7 @@ def validate_gcs_bucket(
         gtfs_rt_glob_path: path that GCSFileSystem.glob can uses to list all RT files.
             Note that this is assumed to have the form {datetime}/{itp_id}/{url_number}/filename.
         out_dir: a directory to store fetched files and results in.
-        results_dir: a bucket path to copy results to.
+        results_bucket: a bucket path to copy results to.
         verbose: whether to print helpful messages along the way.
 
     Note that if out_dir is unspecified, the validation occurs in a temporary directory.
@@ -128,7 +128,6 @@ def validate_gcs_bucket(
         download_gtfs_schedule_zip(gtfs_schedule_path, dst_path_gtfs, fs)
 
         # fetch rt data
-        # TODO: remove hard-coding
         if gtfs_rt_glob_path is None:
             raise ValueError("One of gtfs rt glob path or date must be specified")
 
@@ -162,10 +161,11 @@ def validate_gcs_bucket(
             fs.put(final_files, results_bucket)
 
     except Exception as e:
+        raise e
+    finally:
         if isinstance(tmp_dir, TemporaryDirectory):
             tmp_dir.cleanup()
 
-        raise e
 
 
 def download_gtfs_schedule_zip(gtfs_schedule_path, dst_path, fs):
@@ -204,7 +204,6 @@ def download_rt_files(dst_dir, fs=None, date="2021-08-01", glob_path=None):
 
         dst_parent.mkdir(parents=True, exist_ok=True)
 
-        # TODO: check that this works
         out_fname = RT_FILENAME_TEMPLATE.format(
             itp_id=itp_id,
             url_number=url_number,

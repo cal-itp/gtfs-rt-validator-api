@@ -79,7 +79,7 @@ download_gtfs_schedule_zip(
 download_rt_files(
     RT_DIR,
     fs,
-    "gs://calitp-py-ci/gtfs-rt-validator-api/gtfs_rt_126"
+    glob_path="gs://calitp-py-ci/gtfs-rt-validator-api/gtfs_rt_126/*/126/0/*",
 )
 
 # validate data

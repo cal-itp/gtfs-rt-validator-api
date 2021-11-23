@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 
 
 # Read version number ----
@@ -31,7 +31,7 @@ setup(
     entry_points={
         'console_scripts': ['gtfs-rt-validator-api=gtfs_rt_validator_api:main'],
     },
-    install_requires=["argh"],
+    install_requires=["argh", "gcsfs"],
     python_requires=">=3.6",
     # long_description=README,
     # long_description_content_type="text/markdown",
