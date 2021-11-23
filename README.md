@@ -87,11 +87,6 @@ download_rt_files(
 validate(SCHEDULE_ZIP, RT_DIR)
 ```
 
-### Validating a folder
-
-```python
-```
-
 ### Validating a GCS bucket
 
 Then, from python you can run the following to validate a GCS bucket
