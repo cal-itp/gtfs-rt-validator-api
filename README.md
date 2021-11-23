@@ -23,8 +23,17 @@ This will let you import `gtfs_rt_validator_api`, or run the `gtfs-rt-validator`
 
 Alternatively, you can use the Dockerfile in this repo (shown below).
 
+## Deploy
 
-## Testing
+1. Increment the version number in `gtfs_rt_validator_api.py`
+2. Create a github release, where the tag is the version number.
+
+This will run a github action that builds and pushes the docker image to the
+[calitp container registry called gtfs-rt-validator-api](https://github.com/orgs/cal-itp/packages?repo_name=gtfs-rt-validator-api).
+
+
+
+## Test
 
 ```shell
 docker-compose run gtfs-rt-validator pytest tests
