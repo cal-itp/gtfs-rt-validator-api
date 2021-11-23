@@ -1,5 +1,6 @@
 import uuid
 import pytest
+import json
 
 from tempfile import TemporaryDirectory
 
@@ -63,5 +64,10 @@ def test_validate_gcs_bucket(tmp_gcs_dir):
             results_bucket=tmp_gcs_dir
         )
 
-    assert len(fs.glob(f"{tmp_gcs_dir}/*.results.json")) > 0
+    res_files = list(fs.glob(f"{tmp_gcs_dir}/*"))
+    assert len(res_files) > 0
+    
+    # should not error
+    assert "errorMessage" in json.load(fs.open(res_files[0]))
+
 
