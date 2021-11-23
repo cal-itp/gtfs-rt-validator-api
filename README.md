@@ -11,6 +11,18 @@ A Dockerfile is provided for ease of use.
 
 ## Install
 
+From the root of this repo, run the following:
+
+```
+pip install -e .
+
+export GTFS_VALIDATOR_JAR=<path to your GTFS RT validator JAR file>
+```
+
+This will let you import `gtfs_rt_validator_api`, or run the `gtfs-rt-validator` CLI.
+
+Alternatively, you can use the Dockerfile in this repo (shown below).
+
 
 ## Testing
 
@@ -32,37 +44,44 @@ docker-compose run gtfs-rt-validator /bin/bash
 python3
 ```
 
-### Fetching GTFS RT data
+### Fetching and Validating GTFS RT data
 
 ```python
-from gtfs_rt_validator_api import download_gtfs_schedule_zip, download_rt_files
+from gtfs_rt_validator_api import (
+    download_gtfs_schedule_zip,
+    download_rt_files,
+    validate
+)
 from calitp.storage import get_fs
+
+SCHEDULE_ZIP="gtfs_schedule_126"
+RT_DIR="gtfs_rt_126"
 
 fs = get_fs()
 
-# creates a file named gtfs_schedule.zip with some zipped GTFS data
+# creates a file named gtfs_schedule_106.zip with some zipped GTFS data
 download_gtfs_schedule_zip(
     "gs://calitp-py-ci/gtfs-rt-validator-api/gtfs_schedule_126",
-    zip_schedule,
+    SCHEDULE_ZIP,
     fs
 )
 
-# downloads an individual feed's RT files into example_gtfs_rt
+# downloads an individual feed's RT files into gtfs_rt_126
 download_rt_files(
-    dir_rt,
+    RT_DIR,
     fs,
     "gs://calitp-py-ci/gtfs-rt-validator-api/gtfs_rt_126"
 )
 
-# downloads RT for all feeds into exaple_gtfs_rt_many
-# each feed is a subdirectory of form {calitp_itp_id}/{calitp_url_number}/
-# e.g. example_gtfs_rt_many/106/0/<some rt file>
-download_rt_files("example_gtfs_rt_many", fs, date="2021-09-01")
+# validate data
+# the results of validation are included in the RT_DIR as <filename>.results.json
+validate(SCHEDULE_ZIP, RT_DIR)
 ```
 
 ### Validating a folder
 
-TODO
+```python
+```
 
 ### Validating a GCS bucket
 
@@ -72,17 +91,16 @@ Then, from python you can run the following to validate a GCS bucket
 from gtfs_rt_validator_api import validate_gcs_bucket
 
 validate_gcs_bucket(
-    "cal-itp-data-infra",
+    "cal-itp-data-infra", 
     None,
-    "gs://gtfs-data/schedule/2021-09-01T00:00:00+00:00/106_0",
-    gtfs_rt_glob_path="gs://gtfs-data/rt/2021-09-01T*/106/0/*",
+    "gs://calitp-py-ci/gtfs-rt-validator-api/gtfs_schedule_126",
+    "gs://calitp-py-ci/gtfs-rt-validator-api/gtfs_rt_126/2021*/126/0/*",
 
-    # uncomment to push the resulting validation files up to a gcs bucket.
-    # note that the validator produces 1 result file per individual timepoint
-    # that it checks
-    results_bucket="gs://gtfs-data-test/rt-processed/validation",
+    # if out_dir is None, it uses a temporary directory
+    out_dir="tests/data/validate_gcs_bucket",
 
-    verbose=True
+    # optionally can save final results to a gcs bucket
+    # results_bucket="gs://calitp-py-ci/gtfs-rt-validator-api/test_output"
 )
 ```
 
