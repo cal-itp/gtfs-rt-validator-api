@@ -1,3 +1,4 @@
+# this script is used to push test data to a cloud bucket, to be used for tests.
 from calitp.storage import get_fs
 
 fs = get_fs()
