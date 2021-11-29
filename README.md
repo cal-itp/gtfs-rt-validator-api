@@ -39,6 +39,9 @@ This will run a github action that builds and pushes the docker image to the
 docker-compose run gtfs-rt-validator pytest tests
 ```
 
+Note that the initial data for the tests was seeded into a cloud bucket using
+`scripts/seed_bucket_data.py`.
+
 ## Running validator
 
 ### Setup

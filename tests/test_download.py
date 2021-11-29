@@ -8,6 +8,7 @@ from gtfs_rt_validator_api import download_gtfs_schedule_zip, download_rt_files,
 from calitp.storage import get_fs
 from pathlib import Path
 
+# Note that data for these tests is seeded by scripts/seed_bucket_data.py
 GCS_BASE_DIR="gs://calitp-py-ci/gtfs-rt-validator-api"
 
 fs = get_fs()
