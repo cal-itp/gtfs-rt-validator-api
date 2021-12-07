@@ -72,3 +72,22 @@ def test_validate_gcs_bucket(tmp_gcs_dir):
     assert "errorMessage" in json.load(fs.open(res_files[0]))
 
 
+def test_validate_gcs_bucket_rollup(tmp_gcs_dir):
+    import pandas as pd
+
+    with TemporaryDirectory() as tmp_dir:
+        validate_gcs_bucket(
+            "cal-itp-data-infra", 
+            None,
+            f"{GCS_BASE_DIR}/gtfs_schedule_126",
+            gtfs_rt_glob_path=f"{GCS_BASE_DIR}/gtfs_rt_126/2021*/126/0/*",
+            out_dir=tmp_dir,
+            results_bucket=tmp_gcs_dir + "/rollup.parquet",
+            aggregate_counts=True
+        )
+
+    fname = f"{tmp_gcs_dir}/rollup.parquet"
+    
+    assert fs.exists(fname)
+    
+    assert (pd.read_parquet(fs.open(fname)).calitp_itp_id == 126).all()
