@@ -190,6 +190,40 @@ def validate_gcs_bucket(
             tmp_dir.cleanup()
 
 
+def validate_gcs_bucket_many(
+    project_id, token, param_csv,
+    results_bucket=None, verbose=False, aggregate_counts=False,
+):
+    """Validate many gcs buckets using a parameter file.
+
+    Param CSV should contain the following fields (passed to validate_gcs_bucket):
+        * gtfs_schedule_path
+        * gtfs_rt_glob_path
+
+    """
+
+    import gcsfs
+
+    required_cols = ["gtfs_schedule_path", "gtfs_rt_glob_path"]
+
+    fs = gcsfs.GCSFileSystem(project_id, token=token)
+    params = pd.read_csv(fs.open(param_csv))
+
+    missing_cols = set(required_cols) - set(params.columns)
+    if missing_cols:
+        raise ValueError("parameter csv missing columns: %s" % missing_cols)
+
+    for idx, row in params[required_cols].iterrows():
+        validate_gcs_bucket(
+            project_id,
+            token,
+            results_bucket=results_bucket,
+            verbose=verbose,
+            aggregate_counts=aggregate_counts,
+            **row
+        )
+
+
 
 def download_gtfs_schedule_zip(gtfs_schedule_path, dst_path, fs):
     # fetch and zip gtfs schedule

@@ -4,7 +4,7 @@ import json
 
 from tempfile import TemporaryDirectory
 
-from gtfs_rt_validator_api import download_gtfs_schedule_zip, download_rt_files, validate, validate_gcs_bucket
+from gtfs_rt_validator_api import download_gtfs_schedule_zip, download_rt_files, validate, validate_gcs_bucket, validate_gcs_bucket_many
 from calitp.storage import get_fs
 from pathlib import Path
 
@@ -57,7 +57,7 @@ def test_validate_gcs_bucket(tmp_gcs_dir):
 
     with TemporaryDirectory() as tmp_dir:
         validate_gcs_bucket(
-            "cal-itp-data-infra", 
+            "cal-itp-data-infra",
             None,
             f"{GCS_BASE_DIR}/gtfs_schedule_126",
             gtfs_rt_glob_path=f"{GCS_BASE_DIR}/gtfs_rt_126/2021*/126/0/*",
@@ -91,3 +91,16 @@ def test_validate_gcs_bucket_rollup(tmp_gcs_dir):
     assert fs.exists(fname)
     
     assert (pd.read_parquet(fs.open(fname)).calitp_itp_id == 126).all()
+
+
+def test_validate_gcs_bucket_many(tmp_gcs_dir):
+    with TemporaryDirectory() as tmp_dir:
+        validate_gcs_bucket_many(
+            "cal-itp-data-infra", 
+            None,
+            "gs://calitp-py-ci/gtfs-rt-validator-api/validation_params.csv",
+            results_bucket=tmp_gcs_dir + "/rollup.parquet",
+            aggregate_counts=True
+        )
+
+
