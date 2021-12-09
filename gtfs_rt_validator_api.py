@@ -3,25 +3,22 @@ __version__ = "0.0.1"
 import os
 import json
 import subprocess
-import warnings
 import shutil
 import pandas as pd
-
 import argh
-from argh import arg
 
 from tempfile import TemporaryDirectory, NamedTemporaryFile
 from pathlib import Path
 from collections import defaultdict
-from concurrent import futures
 
 RT_BUCKET_FOLDER="gs://gtfs-data/rt"
 RT_BUCKET_PROCESSED_FOLDER="gs://gtfs-data/rt-processed"
 SCHEDULE_BUCKET_FOLDER="gs://gtfs-data/schedule"
 
 # Note that the final {dt} is needed by the validator, which may read it as
-# timestamp data
-RT_FILENAME_TEMPLATE="{dt}__{itp_id}__{url_number}__{src_fname}__{dt}.pb"
+# timestamp data. Note that the final datetime requires Z at the end, to indicate
+# it's a ISO instant
+RT_FILENAME_TEMPLATE="{dt}__{itp_id}__{url_number}__{src_fname}__{dt}Z.pb"
 N_THREAD_WORKERS = 30
 
 try:
@@ -66,7 +63,8 @@ def build_pb_validator_name(dt, itp_id, url_number, src_fname):
         dt=dt,
         itp_id=itp_id,
         url_number=url_number,
-        src_fname=src_fname
+        src_fname=src_fname,
+        dashed_dt=dt.replace(":", "-")
     )
 
 # Validation ==================================================================
@@ -185,6 +183,7 @@ def validate_gcs_bucket(
 
     except Exception as e:
         raise e
+
     finally:
         if isinstance(tmp_dir, TemporaryDirectory):
             tmp_dir.cleanup()
@@ -193,12 +192,21 @@ def validate_gcs_bucket(
 def validate_gcs_bucket_many(
     project_id, token, param_csv,
     results_bucket=None, verbose=False, aggregate_counts=False,
+    status_result_path=None, strict=False,
 ):
     """Validate many gcs buckets using a parameter file.
+
+    Additional Arguments:
+        strict: whether to raise an error when a validation fails
+        status_result_path: path for saving the status of validations
+        
 
     Param CSV should contain the following fields (passed to validate_gcs_bucket):
         * gtfs_schedule_path
         * gtfs_rt_glob_path
+
+    The full parameters CSV is dumped to JSON with an additional column called
+    is_status, which reports on whether or not the validation was succesfull.
 
     """
 
@@ -213,16 +221,29 @@ def validate_gcs_bucket_many(
     if missing_cols:
         raise ValueError("parameter csv missing columns: %s" % missing_cols)
 
-    for idx, row in params[required_cols].iterrows():
-        validate_gcs_bucket(
-            project_id,
-            token,
-            results_bucket=results_bucket,
-            verbose=verbose,
-            aggregate_counts=aggregate_counts,
-            **row
-        )
+    status = []
+    for idx, row in params.iterrows():
+        try:
+            validate_gcs_bucket(
+                project_id,
+                token,
+                results_bucket=results_bucket + f"/result_{idx}.parquet",
+                verbose=verbose,
+                aggregate_counts=aggregate_counts,
+                **row[required_cols]
+            )
 
+            status.append({**row, "is_success": True})
+        except Exception as e:
+            if strict:
+                raise e
+
+            status.append({**row, "is_success": False})
+    
+    status_newline_json = "\n".join([json.dumps(record) for record in status])
+
+    if status_result_path:
+        fs.pipe(status_result_path, status_newline_json.encode()) 
 
 
 def download_gtfs_schedule_zip(gtfs_schedule_path, dst_path, fs):
@@ -297,6 +318,8 @@ def rollup_error_counts(rt_dir):
 
     return code_counts
 
+
+# Main ========================================================================
 
 def main():
     # TODO: make into simple CLI

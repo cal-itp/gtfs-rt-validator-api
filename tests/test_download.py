@@ -1,6 +1,7 @@
 import uuid
 import pytest
 import json
+import pandas as pd
 
 from tempfile import TemporaryDirectory
 
@@ -53,7 +54,7 @@ def test_validation_manual():
         assert len(list_results(dir_rt)) > 0
 
 
-def test_validate_gcs_bucket(tmp_gcs_dir):
+def test_validate_gcs_bucket(tmp_gcs_dir, capsys):
 
     with TemporaryDirectory() as tmp_dir:
         validate_gcs_bucket(
@@ -69,11 +70,16 @@ def test_validate_gcs_bucket(tmp_gcs_dir):
     assert len(res_files) > 0
     
     # should not error
-    assert "errorMessage" in json.load(fs.open(res_files[0]))
+    file_with_error = tmp_gcs_dir + "/2021-10-01T00:00:51__126__0__gtfs_rt_service_alerts_url"
+    assert "errorMessage" in json.load(fs.open(file_with_error))
+
+    # ensure no error message for parsing timestamp from filename
+    captured = capsys.readouterr() 
+    assert "DateTimeParseException" not in captured.out
+    assert "DateTimeParseException" not in captured.err
 
 
 def test_validate_gcs_bucket_rollup(tmp_gcs_dir):
-    import pandas as pd
 
     with TemporaryDirectory() as tmp_dir:
         validate_gcs_bucket(
@@ -90,7 +96,11 @@ def test_validate_gcs_bucket_rollup(tmp_gcs_dir):
     
     assert fs.exists(fname)
     
-    assert (pd.read_parquet(fs.open(fname)).calitp_itp_id == 126).all()
+    df = pd.read_parquet(fs.open(fname))
+    assert (df.calitp_itp_id == 126).all()
+
+    # 17 distinct rules triggeredrows of data
+    assert df.shape[0] == 17
 
 
 def test_validate_gcs_bucket_many(tmp_gcs_dir):
@@ -99,8 +109,51 @@ def test_validate_gcs_bucket_many(tmp_gcs_dir):
             "cal-itp-data-infra", 
             None,
             "gs://calitp-py-ci/gtfs-rt-validator-api/validation_params.csv",
-            results_bucket=tmp_gcs_dir + "/rollup.parquet",
-            aggregate_counts=True
+            results_bucket=tmp_gcs_dir,
+            verbose=True,
+            aggregate_counts=True,
+            status_result_path=tmp_gcs_dir + "/status.json"
         )
 
+    fname = f"{tmp_gcs_dir}/result_0.parquet"
+    df = pd.read_parquet(fs.open(fname))
+
+    assert (df.calitp_itp_id == 126).all()
+
+    # 17 distinct rules triggered
+    assert df.shape[0] == 17
+
+    status = pd.read_json(tmp_gcs_dir + "/status.json", lines=True)
+    assert len(status) == 1
+    assert status["is_success"].eq(True).all()
+
+
+def test_validate_gcs_bucket_many_25(tmp_gcs_dir):
+    with TemporaryDirectory() as tmp_dir:
+        validate_gcs_bucket_many(
+            "cal-itp-data-infra", 
+            None,
+            "gs://calitp-py-ci/gtfs-rt-validator-api/validation_params_many.csv",
+            results_bucket=tmp_gcs_dir,
+            verbose=True,
+            aggregate_counts=True,
+            status_result_path=tmp_gcs_dir + "/status.json"
+        )
+
+    fs = get_fs()
+    gcs_files = fs.ls(tmp_gcs_dir)
+
+    # check that bucket contains the 24 rollups and a status.json
+    assert len([x for x in gcs_files if "result" in x]) == 24
+
+    # check that 1 failed feed is in status 
+    status = pd.read_json(tmp_gcs_dir + "/status.json", lines = True)
+    assert len(status) == 25
+    assert len(status[~status.is_success]) == 1
+
+    # check 1 result file
+    fname = f"{tmp_gcs_dir}/result_0.parquet"
+    df = pd.read_parquet(fs.open(fname))
+
+    assert (df.calitp_itp_id == 106).all()
 
