@@ -192,7 +192,7 @@ def validate_gcs_bucket(
 def validate_gcs_bucket_many(
     project_id, token, param_csv,
     results_bucket=None, verbose=False, aggregate_counts=False,
-    status_result_path=None, strict=False,
+    status_result_path=None, strict=False, result_name_prefix="result_"
 ):
     """Validate many gcs buckets using a parameter file.
 
@@ -227,7 +227,7 @@ def validate_gcs_bucket_many(
             validate_gcs_bucket(
                 project_id,
                 token,
-                results_bucket=results_bucket + f"/result_{idx}.parquet",
+                results_bucket=results_bucket + f"/{result_name_prefix}{idx}.parquet",
                 verbose=verbose,
                 aggregate_counts=aggregate_counts,
                 **row[required_cols]
