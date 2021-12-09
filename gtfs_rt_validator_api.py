@@ -198,7 +198,9 @@ def validate_gcs_bucket_many(
 
     Additional Arguments:
         strict: whether to raise an error when a validation fails
-        status_result_path: path for saving the status of validations
+        status_result_path: directory for saving the status of validations
+        result_name_prefix: a name to prefix to each result file name. File names
+            will be numbered. E.g. result_0.parquet, result_1.parquet for two feeds.
         
 
     Param CSV should contain the following fields (passed to validate_gcs_bucket):
