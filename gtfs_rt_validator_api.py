@@ -218,6 +218,7 @@ def validate_gcs_bucket_many(
     fs = gcsfs.GCSFileSystem(project_id, token=token)
     params = pd.read_csv(fs.open(param_csv))
 
+    # check that the parameters file has all required columns
     missing_cols = set(required_cols) - set(params.columns)
     if missing_cols:
         raise ValueError("parameter csv missing columns: %s" % missing_cols)
