@@ -15,10 +15,10 @@ RT_BUCKET_FOLDER="gs://gtfs-data/rt"
 RT_BUCKET_PROCESSED_FOLDER="gs://gtfs-data/rt-processed"
 SCHEDULE_BUCKET_FOLDER="gs://gtfs-data/schedule"
 
-# Note that the final {dt} is needed by the validator, which may read it as
+# Note that the final {extraction_date} is needed by the validator, which may read it as
 # timestamp data. Note that the final datetime requires Z at the end, to indicate
 # it's a ISO instant
-RT_FILENAME_TEMPLATE="{dt}__{itp_id}__{url_number}__{src_fname}__{dt}Z.pb"
+RT_FILENAME_TEMPLATE="{extraction_date}__{itp_id}__{url_number}__{src_fname}__{extraction_date}Z.pb"
 N_THREAD_WORKERS = 30
 
 try:
@@ -40,18 +40,18 @@ def parse_pb_name_data(file_name):
     """Returns data encoded in extraction files, such as datetime or itp id.
 
     >>> parse_pb_name_data("2021-01-01__1__0__filename__etc")
-    {'dt': '2021-01-01', 'itp_id': 1, 'url_number': 0, 'src_fname': 'filename'}
+    {'extraction_date': '2021-01-01', 'itp_id': 1, 'url_number': 0, 'src_fname': 'filename'}
 
     """
 
-    dt, itp_id, url_number, src_fname, *_ = Path(file_name).name.split("__")
+    extraction_date, itp_id, url_number, src_fname, *_ = Path(file_name).name.split("__")
     return dict(
-            dt = dt,
+            extraction_date = extraction_date,
             itp_id = int(itp_id),
             url_number = int(url_number),
             src_fname = src_fname)
 
-def build_pb_validator_name(dt, itp_id, url_number, src_fname):
+def build_pb_validator_name(extraction_date, itp_id, url_number, src_fname):
     """Return name for file in the format needed for validation.
 
     Note that the RT validator needs to use timestamps at the end of the filename,
@@ -60,11 +60,10 @@ def build_pb_validator_name(dt, itp_id, url_number, src_fname):
     """
 
     return RT_FILENAME_TEMPLATE.format(
-        dt=dt,
+        extraction_date=extraction_date,
         itp_id=itp_id,
         url_number=url_number,
-        src_fname=src_fname,
-        dashed_dt=dt.replace(":", "-")
+        src_fname=src_fname
     )
 
 # Validation ==================================================================
@@ -312,7 +311,7 @@ def rollup_error_counts(rt_dir):
             code_counts.append({
                 "calitp_itp_id": metadata["itp_id"],
                 "calitp_url_number": metadata["url_number"],
-                "calitp_extracted_at": metadata["dt"],
+                "calitp_extracted_at": metadata["extraction_date"],
                 "rt_feed_type": metadata["src_fname"],
                 "rule_id": entry["errorMessage"]["validationRule"]["errorId"],
                 "n_occurrences": len(entry["occurrenceList"])
