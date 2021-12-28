@@ -313,7 +313,7 @@ def rollup_error_counts(rt_dir):
                 "calitp_url_number": metadata["url_number"],
                 "calitp_extracted_at": metadata["extraction_date"],
                 "rt_feed_type": metadata["src_fname"],
-                "rule_id": entry["errorMessage"]["validationRule"]["errorId"],
+                "error_id": entry["errorMessage"]["validationRule"]["errorId"],
                 "n_occurrences": len(entry["occurrenceList"])
             })
 
