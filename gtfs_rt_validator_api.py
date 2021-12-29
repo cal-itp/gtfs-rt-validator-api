@@ -3,24 +3,22 @@ __version__ = "0.0.1"
 import os
 import json
 import subprocess
-import warnings
 import shutil
-
+import pandas as pd
 import argh
-from argh import arg
 
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, NamedTemporaryFile
 from pathlib import Path
 from collections import defaultdict
-from concurrent import futures
 
 RT_BUCKET_FOLDER="gs://gtfs-data/rt"
 RT_BUCKET_PROCESSED_FOLDER="gs://gtfs-data/rt-processed"
 SCHEDULE_BUCKET_FOLDER="gs://gtfs-data/schedule"
 
-# Note that the final {dt} is needed by the validator, which may read it as
-# timestamp data
-RT_FILENAME_TEMPLATE="{dt}__{itp_id}__{url_number}__{src_fname}__{dt}.pb"
+# Note that the final {extraction_date} is needed by the validator, which may read it as
+# timestamp data. Note that the final datetime requires Z at the end, to indicate
+# it's a ISO instant
+RT_FILENAME_TEMPLATE="{extraction_date}__{itp_id}__{url_number}__{src_fname}__{extraction_date}Z.pb"
 N_THREAD_WORKERS = 30
 
 try:
@@ -31,29 +29,42 @@ except KeyError:
 
 # Utility funcs ----
 
-def retry_on_fail(f, max_retries=2):
-    n_retries = 0
-
-    for n_retries in range(max_retries + 1):
-        try:
-            f()
-        except Exception as e:
-            if n_retries < max_retries:
-                n_retries += 1
-                warnings.warn("Function failed, starting retry: %s" % n_retries)
-            else:
-                raise e
-
-def put_file(fs, src, dst):
-    retry_on_fail(
-        lambda: fs.put(src, dst),
-        2
-    )
 
 def json_to_newline_delimited(in_file, out_file):
     data = json.load(open(in_file))
     with open(out_file, "w") as f:
         f.write("\n".join([json.dumps(record) for record in data]))
+
+
+def parse_pb_name_data(file_name):
+    """Returns data encoded in extraction files, such as datetime or itp id.
+
+    >>> parse_pb_name_data("2021-01-01__1__0__filename__etc")
+    {'extraction_date': '2021-01-01', 'itp_id': 1, 'url_number': 0, 'src_fname': 'filename'}
+
+    """
+
+    extraction_date, itp_id, url_number, src_fname, *_ = Path(file_name).name.split("__")
+    return dict(
+            extraction_date = extraction_date,
+            itp_id = int(itp_id),
+            url_number = int(url_number),
+            src_fname = src_fname)
+
+def build_pb_validator_name(extraction_date, itp_id, url_number, src_fname):
+    """Return name for file in the format needed for validation.
+
+    Note that the RT validator needs to use timestamps at the end of the filename,
+    so this function ensures they are present.
+
+    """
+
+    return RT_FILENAME_TEMPLATE.format(
+        extraction_date=extraction_date,
+        itp_id=itp_id,
+        url_number=url_number,
+        src_fname=src_fname
+    )
 
 # Validation ==================================================================
 
@@ -83,7 +94,7 @@ def validate(gtfs_file, rt_path, verbose=False):
 
 def validate_gcs_bucket(
         project_id, token, gtfs_schedule_path, gtfs_rt_glob_path=None,
-        out_dir=None, results_bucket=None, verbose=False, 
+        out_dir=None, results_bucket=None, verbose=False, aggregate_counts=False,
         ):
     """
     Fetch and validate GTFS RT data held in a google cloud bucket.
@@ -113,7 +124,7 @@ def validate_gcs_bucket(
         tmp_dir = None
         tmp_dir_name = out_dir
 
-    if results_bucket and not results_bucket.endswith("/"):
+    if results_bucket and not aggregate_counts and results_bucket.endswith("/"):
         results_bucket = f"{results_bucket}/"
 
     final_json_dir = Path(tmp_dir_name) / "newline_json"
@@ -133,11 +144,20 @@ def validate_gcs_bucket(
 
 
         download_rt_files(dst_path_rt, fs, glob_path = gtfs_rt_glob_path)
-
         print("Validating data")
         validate(f"{dst_path_gtfs}.zip", dst_path_rt, verbose=verbose)
 
-        if results_bucket:
+        if results_bucket and aggregate_counts:
+            print(f"Saving aggregate counts as: {results_bucket}")
+
+            error_counts = rollup_error_counts(dst_path_rt)
+            df = pd.DataFrame(error_counts)
+
+            with NamedTemporaryFile() as tmp_file:
+                df.to_parquet(tmp_file.name)
+                fs.put(tmp_file.name, results_bucket)
+
+        elif results_bucket and not aggregate_counts:
             # validator stores results as {filename}.results.json
             print(f"Putting data into results bucket: {results_bucket}")
 
@@ -162,10 +182,70 @@ def validate_gcs_bucket(
 
     except Exception as e:
         raise e
+
     finally:
         if isinstance(tmp_dir, TemporaryDirectory):
             tmp_dir.cleanup()
 
+
+def validate_gcs_bucket_many(
+    project_id, token, param_csv,
+    results_bucket=None, verbose=False, aggregate_counts=False,
+    status_result_path=None, strict=False, result_name_prefix="result_"
+):
+    """Validate many gcs buckets using a parameter file.
+
+    Additional Arguments:
+        strict: whether to raise an error when a validation fails
+        status_result_path: directory for saving the status of validations
+        result_name_prefix: a name to prefix to each result file name. File names
+            will be numbered. E.g. result_0.parquet, result_1.parquet for two feeds.
+        
+
+    Param CSV should contain the following fields (passed to validate_gcs_bucket):
+        * gtfs_schedule_path
+        * gtfs_rt_glob_path
+
+    The full parameters CSV is dumped to JSON with an additional column called
+    is_status, which reports on whether or not the validation was succesfull.
+
+    """
+
+    import gcsfs
+
+    required_cols = ["gtfs_schedule_path", "gtfs_rt_glob_path"]
+
+    fs = gcsfs.GCSFileSystem(project_id, token=token)
+    params = pd.read_csv(fs.open(param_csv))
+
+    # check that the parameters file has all required columns
+    missing_cols = set(required_cols) - set(params.columns)
+    if missing_cols:
+        raise ValueError("parameter csv missing columns: %s" % missing_cols)
+
+    status = []
+    for idx, row in params.iterrows():
+        try:
+            validate_gcs_bucket(
+                project_id,
+                token,
+                results_bucket=results_bucket + f"/{result_name_prefix}{idx}.parquet",
+                verbose=verbose,
+                aggregate_counts=aggregate_counts,
+                **row[required_cols]
+            )
+
+            status.append({**row, "is_success": True})
+        except Exception as e:
+            if strict:
+                raise e
+
+            status.append({**row, "is_success": False})
+    
+    status_newline_json = "\n".join([json.dumps(record) for record in status])
+
+    if status_result_path:
+        fs.pipe(status_result_path, status_newline_json.encode()) 
 
 
 def download_gtfs_schedule_zip(gtfs_schedule_path, dst_path, fs):
@@ -204,12 +284,7 @@ def download_rt_files(dst_dir, fs=None, date="2021-08-01", glob_path=None):
 
         dst_parent.mkdir(parents=True, exist_ok=True)
 
-        out_fname = RT_FILENAME_TEMPLATE.format(
-            itp_id=itp_id,
-            url_number=url_number,
-            dt=dt,
-            src_fname=src_fname
-        )
+        out_fname = build_pb_validator_name(dt, itp_id, url_number, src_fname)
 
         dst_name = str(dst_parent / out_fname)
 
@@ -218,12 +293,35 @@ def download_rt_files(dst_dir, fs=None, date="2021-08-01", glob_path=None):
 
     print(f"Copying {len(to_copy)} files")
 
-    with futures.ThreadPoolExecutor(max_workers=N_THREAD_WORKERS) as pool:
-        list(pool.map(lambda args: fs.get(*args), to_copy))
+    src_files, dst_files = zip(*to_copy)
+    fs.get(list(src_files), list(dst_files))
 
 
 # Rectangling =================================================================
 
+
+def rollup_error_counts(rt_dir):
+    result_files = Path(rt_dir).glob("*.results.json")
+
+    code_counts = []
+    for path in result_files:
+        metadata = parse_pb_name_data(path)
+
+        result_json = json.load(path.open())
+        for entry in result_json:
+            code_counts.append({
+                "calitp_itp_id": metadata["itp_id"],
+                "calitp_url_number": metadata["url_number"],
+                "calitp_extracted_at": metadata["extraction_date"],
+                "rt_feed_type": metadata["src_fname"],
+                "error_id": entry["errorMessage"]["validationRule"]["errorId"],
+                "n_occurrences": len(entry["occurrenceList"])
+            })
+
+    return code_counts
+
+
+# Main ========================================================================
 
 def main():
     # TODO: make into simple CLI
