@@ -1,14 +1,4 @@
-# ---
-# operator: operators.PythonToWarehouseOperator
-# table_name: "views.gtfs_rt_dim_validation_rules"
-# fields:
-#   rule_key: 
-#   rule_id: 'Rule identifier from the validator (ex. "E001")'
-#   rule_severity: 'ERROR or WARNING'
-#   rule_tile: 'Name of the rule (ex. "Not in POSIX time")'
-#   rule_description: 'Longer explanation of the rule meaning'
-#   rule_occurrence_suffix: 'A string that, when concatenated with a "prefix" in the validation JSON results identifying the specific record in violation, creates a sentence describing the specific violation. For example, the prefix might say "trip_id 12345" and then the suffix would say something like "is not strictly sorted by increasing stop_sequence"'
-# ---
+# This script 
 
 import requests
 import re
