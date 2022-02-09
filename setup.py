@@ -1,10 +1,10 @@
-from setuptools import setup
+import ast
+import re
 
+from setuptools import setup
 
 # Read version number ----
 
-import re
-import ast
 
 _version_re = re.compile(r"__version__\s+=\s+(.*)")
 

@@ -1,9 +1,11 @@
-import uuid
-import pytest
 import json
-import pandas as pd
-
+import uuid
+from pathlib import Path
 from tempfile import TemporaryDirectory
+
+import pandas as pd
+import pytest
+from calitp.storage import get_fs
 
 from gtfs_rt_validator_api import (
     download_gtfs_schedule_zip,
@@ -12,8 +14,6 @@ from gtfs_rt_validator_api import (
     validate_gcs_bucket,
     validate_gcs_bucket_many,
 )
-from calitp.storage import get_fs
-from pathlib import Path
 
 # Note that data for these tests is seeded by scripts/seed_bucket_data.py
 GCS_BASE_DIR = "gs://calitp-py-ci/gtfs-rt-validator-api"
