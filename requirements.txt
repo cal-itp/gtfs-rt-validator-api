@@ -1,6 +1,7 @@
-argh==0.26.2 
+argh==0.26.2
 gcsfs==0.8.0
 calitp==0.0.8
 google-auth==1.32.1
 gtfs-realtime-bindings==0.0.7
 pytest==6.2.5
+black==19.10b0

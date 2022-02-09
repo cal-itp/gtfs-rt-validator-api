@@ -5,14 +5,21 @@ import pandas as pd
 
 from tempfile import TemporaryDirectory
 
-from gtfs_rt_validator_api import download_gtfs_schedule_zip, download_rt_files, validate, validate_gcs_bucket, validate_gcs_bucket_many
+from gtfs_rt_validator_api import (
+    download_gtfs_schedule_zip,
+    download_rt_files,
+    validate,
+    validate_gcs_bucket,
+    validate_gcs_bucket_many,
+)
 from calitp.storage import get_fs
 from pathlib import Path
 
 # Note that data for these tests is seeded by scripts/seed_bucket_data.py
-GCS_BASE_DIR="gs://calitp-py-ci/gtfs-rt-validator-api"
+GCS_BASE_DIR = "gs://calitp-py-ci/gtfs-rt-validator-api"
 
 fs = get_fs()
+
 
 @pytest.fixture
 def tmp_gcs_dir():
@@ -37,15 +44,11 @@ def test_validation_manual():
         dir_rt = f"{tmp_dir}/rt"
 
         download_gtfs_schedule_zip(
-            f"{GCS_BASE_DIR}/gtfs_schedule_126",
-            zip_schedule,
-            fs
+            f"{GCS_BASE_DIR}/gtfs_schedule_126", zip_schedule, fs
         )
 
         download_rt_files(
-            dir_rt,
-            fs,
-            glob_path=f"{GCS_BASE_DIR}/gtfs_rt_126/*/126/0/*",
+            dir_rt, fs, glob_path=f"{GCS_BASE_DIR}/gtfs_rt_126/*/126/0/*",
         )
 
         print("validating")
@@ -63,18 +66,20 @@ def test_validate_gcs_bucket(tmp_gcs_dir, capsys):
             f"{GCS_BASE_DIR}/gtfs_schedule_126",
             gtfs_rt_glob_path=f"{GCS_BASE_DIR}/gtfs_rt_126/2021*/126/0/*",
             out_dir=tmp_dir,
-            results_bucket=tmp_gcs_dir
+            results_bucket=tmp_gcs_dir,
         )
 
     res_files = list(fs.glob(f"{tmp_gcs_dir}/*"))
     assert len(res_files) > 0
-    
+
     # should not error
-    file_with_error = tmp_gcs_dir + "/2021-10-01T00:00:51__126__0__gtfs_rt_service_alerts_url"
+    file_with_error = (
+        tmp_gcs_dir + "/2021-10-01T00:00:51__126__0__gtfs_rt_service_alerts_url"
+    )
     assert "errorMessage" in json.load(fs.open(file_with_error))
 
     # ensure no error message for parsing timestamp from filename
-    captured = capsys.readouterr() 
+    captured = capsys.readouterr()
     assert "DateTimeParseException" not in captured.out
     assert "DateTimeParseException" not in captured.err
 
@@ -83,19 +88,19 @@ def test_validate_gcs_bucket_rollup(tmp_gcs_dir):
 
     with TemporaryDirectory() as tmp_dir:
         validate_gcs_bucket(
-            "cal-itp-data-infra", 
+            "cal-itp-data-infra",
             None,
             f"{GCS_BASE_DIR}/gtfs_schedule_126",
             gtfs_rt_glob_path=f"{GCS_BASE_DIR}/gtfs_rt_126/2021*/126/0/*",
             out_dir=tmp_dir,
             results_bucket=tmp_gcs_dir + "/rollup.parquet",
-            aggregate_counts=True
+            aggregate_counts=True,
         )
 
     fname = f"{tmp_gcs_dir}/rollup.parquet"
-    
+
     assert fs.exists(fname)
-    
+
     df = pd.read_parquet(fs.open(fname))
     assert (df.calitp_itp_id == 126).all()
 
@@ -104,15 +109,15 @@ def test_validate_gcs_bucket_rollup(tmp_gcs_dir):
 
 
 def test_validate_gcs_bucket_many(tmp_gcs_dir):
-    with TemporaryDirectory() as tmp_dir:
+    with TemporaryDirectory():
         validate_gcs_bucket_many(
-            "cal-itp-data-infra", 
+            "cal-itp-data-infra",
             None,
             "gs://calitp-py-ci/gtfs-rt-validator-api/validation_params.csv",
             results_bucket=tmp_gcs_dir,
             verbose=True,
             aggregate_counts=True,
-            status_result_path=tmp_gcs_dir + "/status.json"
+            status_result_path=tmp_gcs_dir + "/status.json",
         )
 
     fname = f"{tmp_gcs_dir}/result_0.parquet"
@@ -129,15 +134,15 @@ def test_validate_gcs_bucket_many(tmp_gcs_dir):
 
 
 def test_validate_gcs_bucket_many_25(tmp_gcs_dir):
-    with TemporaryDirectory() as tmp_dir:
+    with TemporaryDirectory():
         validate_gcs_bucket_many(
-            "cal-itp-data-infra", 
+            "cal-itp-data-infra",
             None,
             "gs://calitp-py-ci/gtfs-rt-validator-api/validation_params_many.csv",
             results_bucket=tmp_gcs_dir,
             verbose=True,
             aggregate_counts=True,
-            status_result_path=tmp_gcs_dir + "/status.json"
+            status_result_path=tmp_gcs_dir + "/status.json",
         )
 
     fs = get_fs()
@@ -146,8 +151,8 @@ def test_validate_gcs_bucket_many_25(tmp_gcs_dir):
     # check that bucket contains the 24 rollups and a status.json
     assert len([x for x in gcs_files if "result" in x]) == 24
 
-    # check that 1 failed feed is in status 
-    status = pd.read_json(tmp_gcs_dir + "/status.json", lines = True)
+    # check that 1 failed feed is in status
+    status = pd.read_json(tmp_gcs_dir + "/status.json", lines=True)
     assert len(status) == 25
     assert len(status[~status.is_success]) == 1
 
@@ -156,4 +161,3 @@ def test_validate_gcs_bucket_many_25(tmp_gcs_dir):
     df = pd.read_parquet(fs.open(fname))
 
     assert (df.calitp_itp_id == 106).all()
-

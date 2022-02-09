@@ -5,11 +5,13 @@ from setuptools import setup
 
 import re
 import ast
-_version_re = re.compile(r'__version__\s+=\s+(.*)')
 
-with open('gtfs_rt_validator_api.py', 'rb') as f:
-    VERSION = str(ast.literal_eval(_version_re.search(
-        f.read().decode('utf-8')).group(1)))
+_version_re = re.compile(r"__version__\s+=\s+(.*)")
+
+with open("gtfs_rt_validator_api.py", "rb") as f:
+    VERSION = str(
+        ast.literal_eval(_version_re.search(f.read().decode("utf-8")).group(1))
+    )
 
 # Get README ----
 
@@ -27,9 +29,9 @@ setup(
     # license='MIT',
     # author_email='mc_al_general@fastmail.com',
     # url='https://github.com/cal-itp/gtfs_validator_api',
-    keywords=['package', ],
+    keywords=["package"],
     entry_points={
-        'console_scripts': ['gtfs-rt-validator-api=gtfs_rt_validator_api:main'],
+        "console_scripts": ["gtfs-rt-validator-api=gtfs_rt_validator_api:main"],
     },
     install_requires=["argh", "gcsfs", "pyarrow"],
     python_requires=">=3.6",
