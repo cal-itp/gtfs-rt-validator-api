@@ -11,10 +11,10 @@ RUN wget \
     https://s3.amazonaws.com/gtfs-rt-validator/travis_builds/gtfs-realtime-validator-lib/1.0.0-SNAPSHOT/gtfs-realtime-validator-lib-1.0.0-SNAPSHOT.jar \
     -O ${GTFS_VALIDATOR_JAR}
 
-# Install python
+# Install python and deps
 RUN apt-get update -y \
-    && apt-get install -y python3 python3-pip \
-    && python3 -m pip install -r requirements.txt
+    && apt-get install -y python3 python3-pip
+RUN python3 -m pip install -r requirements.txt
 
 # Install package
 WORKDIR /application
