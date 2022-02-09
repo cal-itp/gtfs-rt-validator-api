@@ -1,15 +1,18 @@
 __version__ = "0.0.1"
 
-import os
 import json
-import subprocess
+import os
 import shutil
-import pandas as pd
-import argh
-
-from tempfile import TemporaryDirectory, NamedTemporaryFile
-from pathlib import Path
+import subprocess
 from collections import defaultdict
+from multiprocessing.dummy import Pool
+from pathlib import Path
+from tempfile import NamedTemporaryFile, TemporaryDirectory
+from typing import Optional
+
+import argh
+import pandas as pd
+import typer
 
 RT_BUCKET_FOLDER = "gs://gtfs-data/rt"
 RT_BUCKET_PROCESSED_FOLDER = "gs://gtfs-data/rt-processed"
@@ -28,6 +31,7 @@ try:
 except KeyError:
     raise Exception("Must set the environment variable GTFS_VALIDATOR_JAR")
 
+app = typer.Typer()
 
 # Utility funcs ----
 
@@ -82,6 +86,7 @@ def gather_results(rt_path):
     raise NotImplementedError()
 
 
+@app.command()
 def validate(gtfs_file, rt_path, verbose=False):
 
     if not isinstance(gtfs_file, str):
@@ -107,6 +112,7 @@ def validate(gtfs_file, rt_path, verbose=False):
     )
 
 
+@app.command()
 def validate_gcs_bucket(
     project_id,
     token,
@@ -206,6 +212,17 @@ def validate_gcs_bucket(
             tmp_dir.cleanup()
 
 
+def try_validate_gcs_bucket(*args, strict=False, **kwargs) -> Optional[Exception]:
+    try:
+        validate_gcs_bucket(*args, **kwargs)
+    except Exception as e:
+        print(f"got exception from underlying thread: {str(e)}")
+        if strict:
+            raise e
+        return e
+
+
+@app.command()
 def validate_gcs_bucket_many(
     project_id,
     token,
@@ -216,6 +233,7 @@ def validate_gcs_bucket_many(
     status_result_path=None,
     strict=False,
     result_name_prefix="result_",
+    threads=1,
 ):
     """Validate many gcs buckets using a parameter file.
 
@@ -247,24 +265,31 @@ def validate_gcs_bucket_many(
     if missing_cols:
         raise ValueError("parameter csv missing columns: %s" % missing_cols)
 
-    status = []
-    for idx, row in params.iterrows():
-        try:
-            validate_gcs_bucket(
-                project_id,
-                token,
+    futures = []
+
+    print(f"processing {params.shape[0]} inputs with {threads} threads")
+
+    with Pool(processes=threads) as pool:
+        for idx, row in params.iterrows():
+            kwargs = dict(
                 results_bucket=results_bucket + f"/{result_name_prefix}{idx}.parquet",
                 verbose=verbose,
+                strict=strict,
                 aggregate_counts=aggregate_counts,
                 **row[required_cols],
             )
+            futures.append(
+                (
+                    pool.apply_async(
+                        try_validate_gcs_bucket, (project_id, token), kwargs
+                    ),
+                    row,
+                )
+            )
 
-            status.append({**row, "is_success": True})
-        except Exception as e:
-            if strict:
-                raise e
-
-            status.append({**row, "is_success": False})
+    status = [
+        {**row, "is_success": future.get() is not None} for future, row in futures
+    ]
 
     status_newline_json = "\n".join([json.dumps(record) for record in status])
 
@@ -274,6 +299,7 @@ def validate_gcs_bucket_many(
 
 def download_gtfs_schedule_zip(gtfs_schedule_path, dst_path, fs):
     # fetch and zip gtfs schedule
+    print(f"Fetching gtfs schedule data from {gtfs_schedule_path} to {dst_path}")
     fs.get(gtfs_schedule_path, dst_path, recursive=True)
     shutil.make_archive(dst_path, "zip", dst_path)
 
@@ -356,11 +382,13 @@ def rollup_error_counts(rt_dir):
 
 def main():
     # TODO: make into simple CLI
-    result = argh.dispatch_commands([validate, validate_gcs_bucket])
+    result = argh.dispatch_commands(
+        [validate, validate_gcs_bucket, validate_gcs_bucket_many]
+    )
 
     if result is not None:
         print(json.dumps(result))
 
 
 if __name__ == "__main__":
-    main()
+    app()
