@@ -287,7 +287,10 @@ def validate_gcs_bucket_many(
 
     # https://github.com/fsspec/gcsfs/issues/379#issuecomment-826887228
     # Note that this seems to differ per OS
-    multiprocessing.set_start_method("spawn")
+    try:
+        multiprocessing.set_start_method("spawn")
+    except RuntimeError:
+        pass
 
     # from https://stackoverflow.com/a/55149491
     # could be cleaned up a bit with a namedtuple
