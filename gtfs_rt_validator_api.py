@@ -287,14 +287,11 @@ def validate_gcs_bucket_many(
 
     # https://github.com/fsspec/gcsfs/issues/379#issuecomment-826887228
     # Note that this seems to differ per OS
-    try:
-        multiprocessing.set_start_method("spawn")
-    except RuntimeError:
-        pass
+    ctx = multiprocessing.get_context("spawn")
 
     # from https://stackoverflow.com/a/55149491
     # could be cleaned up a bit with a namedtuple
-    with ProcessPoolExecutor(max_workers=threads) as pool:
+    with ProcessPoolExecutor(max_workers=threads, mp_context=ctx) as pool:
         futures = {
             pool.submit(
                 validate_gcs_bucket,

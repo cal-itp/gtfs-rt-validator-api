@@ -61,6 +61,7 @@ def test_validate_gcs_bucket(tmp_gcs_dir, capsys):
 
     with TemporaryDirectory() as tmp_dir:
         validate_gcs_bucket(
+            0,
             "cal-itp-data-infra",
             None,
             f"{GCS_BASE_DIR}/gtfs_schedule_126",
@@ -88,6 +89,7 @@ def test_validate_gcs_bucket_rollup(tmp_gcs_dir):
 
     with TemporaryDirectory() as tmp_dir:
         validate_gcs_bucket(
+            0,
             "cal-itp-data-infra",
             None,
             f"{GCS_BASE_DIR}/gtfs_schedule_126",
