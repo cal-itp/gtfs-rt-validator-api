@@ -1,3 +1,7 @@
+"""
+NOTE: These tests are deprecated and should be rewritten to not hit GCS.
+They will likely not pass in the current state.
+"""
 import json
 import uuid
 from pathlib import Path

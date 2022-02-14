@@ -20,4 +20,5 @@ if __name__ == "__main__":
         verbose=True,
         aggregate_counts=True,
         status_result_path="gs://gtfs-data-test/gtfs-rt-validator-api/test-pipeline/status.json",
+        threads=8,
     )
