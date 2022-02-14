@@ -1,3 +1,7 @@
+"""
+NOTE: This is probably deprecated/unnecessary since we aren't rectangle-ing any RT data
+via Python/GCS; it's going in BigQuery
+"""
 import os
 from pathlib import Path
 

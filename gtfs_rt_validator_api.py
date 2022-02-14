@@ -40,6 +40,7 @@ try:
 except KeyError:
     raise Exception("Must set the environment variable GTFS_VALIDATOR_JAR")
 
+# https://typer.tiangolo.com/
 app = typer.Typer()
 
 # Utility funcs ----
@@ -307,8 +308,10 @@ def validate_gcs_bucket_many(
             for idx, row in params.iterrows()
         }
 
+        # Processes each future as it is completed, i.e. returned or errored
         for future in concurrent.futures.as_completed(futures):
             row = futures[future]
+            # result() will throw an exception if one occurred in the underlying function
             try:
                 future.result()
             except Exception as e:
