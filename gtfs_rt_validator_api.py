@@ -161,11 +161,11 @@ def validate_gcs_bucket(
         out_dir=out_dir,
         result_bucket=results_bucket,
     )
-    logger.info("entering validate_gcs_bucket")
+    logger.debug("entering validate_gcs_bucket")
 
-    logger.info("getting gcs file system")
+    logger.debug("getting gcs file system")
     fs = gcsfs.GCSFileSystem(project_id, token=token)
-    logger.info("got gcs file system")
+    logger.debug("got gcs file system")
 
     if not out_dir:
         tmp_dir = TemporaryDirectory()

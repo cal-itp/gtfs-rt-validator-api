@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+"""
+This is a quick way to execute validation against many feeds using a given params CSV
+
+The main configurable parameter is param_csv, which needs to point at a validation params CSV generated
+by the relevant airflow job
+"""
+
 from multiprocessing import freeze_support
 
 from gtfs_rt_validator_api import validate_gcs_bucket_many

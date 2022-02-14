@@ -1,4 +1,9 @@
-# this script is used to push test data to a cloud bucket, to be used for tests.
+"""
+this script is used to push test data to a cloud bucket, to be used for tests.
+
+NOTE: we shouldn't really use this any more; we should generally be pulling
+real data from the gtfs_data bucket
+"""
 import pandas as pd
 from calitp.storage import get_fs
 
