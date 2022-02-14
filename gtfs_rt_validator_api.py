@@ -124,15 +124,15 @@ def validate(gtfs_file, rt_path, verbose=False):
 
 @app.command()
 def validate_gcs_bucket(
-    idx,
     project_id,
     token,
     gtfs_schedule_path,
-    gtfs_rt_glob_path=None,
-    out_dir=None,
-    results_bucket=None,
-    verbose=False,
-    aggregate_counts=False,
+    gtfs_rt_glob_path: str = None,
+    out_dir: str = None,
+    results_bucket: str = None,
+    verbose: bool = False,
+    aggregate_counts: bool = False,
+    idx: int = None,
 ):
     """
     Fetch and validate GTFS RT data held in a google cloud bucket.
@@ -146,6 +146,7 @@ def validate_gcs_bucket(
         out_dir: a directory to store fetched files and results in.
         results_bucket: a bucket path to copy results to.
         verbose: whether to print helpful messages along the way.
+        aggregate_counts: tbd
 
     Note that if out_dir is unspecified, the validation occurs in a temporary directory.
 
@@ -194,7 +195,7 @@ def validate_gcs_bucket(
         validate(f"{dst_path_gtfs}.zip", dst_path_rt, verbose=verbose)
 
         if results_bucket and aggregate_counts:
-            print(f"Saving aggregate counts as: {results_bucket}")
+            logger.info(f"Saving aggregate counts as: {results_bucket}")
 
             error_counts = rollup_error_counts(dst_path_rt)
             df = pd.DataFrame(error_counts)
@@ -205,7 +206,7 @@ def validate_gcs_bucket(
 
         elif results_bucket and not aggregate_counts:
             # validator stores results as {filename}.results.json
-            print(f"Putting data into results bucket: {results_bucket}")
+            logger.info(f"Putting data into results bucket: {results_bucket}")
 
             # fetch all results files created by the validator
             all_results = list(Path(dst_path_rt).glob("*.results.json"))
@@ -268,7 +269,7 @@ def validate_gcs_bucket_many(
 
     required_cols = ["gtfs_schedule_path", "gtfs_rt_glob_path"]
 
-    print(f"reading params from {param_csv}")
+    logger.info(f"reading params from {param_csv}")
     fs = gcsfs.GCSFileSystem(project_id, token=token)
     params = pd.read_csv(fs.open(param_csv))
 
@@ -283,7 +284,7 @@ def validate_gcs_bucket_many(
 
     statuses = []
 
-    print(f"processing {params.shape[0]} inputs with {threads} threads")
+    logger.info(f"processing {params.shape[0]} inputs with {threads} threads")
 
     # https://github.com/fsspec/gcsfs/issues/379#issuecomment-826887228
     # Note that this seems to differ per OS
@@ -295,12 +296,12 @@ def validate_gcs_bucket_many(
         futures = {
             pool.submit(
                 validate_gcs_bucket,
-                idx,
                 project_id,
                 token,
                 verbose=verbose,
                 results_bucket=results_bucket + f"/{result_name_prefix}{idx}.parquet",
                 aggregate_counts=aggregate_counts,
+                idx=idx,
                 **row[required_cols],
             ): row
             for idx, row in params.iterrows()
@@ -312,7 +313,6 @@ def validate_gcs_bucket_many(
                 future.result()
             except Exception as e:
                 if strict:
-                    print("I AM HERE AND RETURNING")
                     raise e
                 statuses.append({**row, "is_success": False})
             else:
@@ -332,6 +332,10 @@ def download_gtfs_schedule_zip(gtfs_schedule_path, dst_path, fs):
     # fetch and zip gtfs schedule
     logger.info(f"Fetching gtfs schedule data from {gtfs_schedule_path} to {dst_path}")
     fs.get(gtfs_schedule_path, dst_path, recursive=True)
+    try:
+        os.remove(os.path.join(dst_path, "areas.txt"))
+    except FileNotFoundError:
+        pass
     shutil.make_archive(dst_path, "zip", dst_path)
 
 
@@ -381,7 +385,7 @@ def download_rt_files(dst_dir, fs=None, date="2021-08-01", glob_path=None) -> in
         logger.warn(msg)
         raise ValueError(msg)
 
-    logger.info(f"downloading {len(to_copy)} files")
+    logger.info(f"downloading {len(to_copy)} files with glob_path {glob_path}")
 
     src_files, dst_files = zip(*to_copy)
     fs.get(list(src_files), list(dst_files))
