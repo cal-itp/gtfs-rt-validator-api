@@ -98,7 +98,7 @@ Then, from python you can run the following to validate a GCS bucket
 from gtfs_rt_validator_api import validate_gcs_bucket
 
 validate_gcs_bucket(
-    "cal-itp-data-infra", 
+    "cal-itp-data-infra",
     None,
     "gs://calitp-py-ci/gtfs-rt-validator-api/gtfs_schedule_126",
     "gs://calitp-py-ci/gtfs-rt-validator-api/gtfs_rt_126/2021*/126/0/*",

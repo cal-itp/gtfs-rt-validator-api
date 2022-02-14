@@ -20,7 +20,7 @@ jobs:
             -v $GOOGLE_APPLICATION_CREDENTIALS:'/gcloud_auth' \
             -e GOOGLE_APPLICATION_CREDENTIALS='/gcloud_auth' \
             gtfs-rt-validator pytest tests
-          
+
   build_push:
     name: Package docker image
     runs-on: ubuntu-18.04

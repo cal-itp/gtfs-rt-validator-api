@@ -1,24 +1,38 @@
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
-import os
+import concurrent
 import json
-import subprocess
+import multiprocessing
+import os
 import shutil
-import pandas as pd
-import argh
-
-from tempfile import TemporaryDirectory, NamedTemporaryFile
-from pathlib import Path
+import subprocess
 from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 
-RT_BUCKET_FOLDER="gs://gtfs-data/rt"
-RT_BUCKET_PROCESSED_FOLDER="gs://gtfs-data/rt-processed"
-SCHEDULE_BUCKET_FOLDER="gs://gtfs-data/schedule"
+import gcsfs
+import pandas as pd
+import pendulum
+import structlog as structlog
+import typer
+from structlog import configure
+from structlog.threadlocal import bind_threadlocal, clear_threadlocal, merge_threadlocal
+
+configure(processors=[merge_threadlocal, structlog.processors.KeyValueRenderer()])
+
+logger = structlog.get_logger()
+
+RT_BUCKET_FOLDER = "gs://gtfs-data/rt"
+RT_BUCKET_PROCESSED_FOLDER = "gs://gtfs-data/rt-processed"
+SCHEDULE_BUCKET_FOLDER = "gs://gtfs-data/schedule"
 
 # Note that the final {extraction_date} is needed by the validator, which may read it as
 # timestamp data. Note that the final datetime requires Z at the end, to indicate
 # it's a ISO instant
-RT_FILENAME_TEMPLATE="{extraction_date}__{itp_id}__{url_number}__{src_fname}__{extraction_date}Z.pb"
+RT_FILENAME_TEMPLATE = (
+    "{extraction_date}__{itp_id}__{url_number}__{src_fname}__{extraction_date}Z.pb"
+)
 N_THREAD_WORKERS = 30
 
 try:
@@ -26,6 +40,8 @@ try:
 except KeyError:
     raise Exception("Must set the environment variable GTFS_VALIDATOR_JAR")
 
+# https://typer.tiangolo.com/
+app = typer.Typer()
 
 # Utility funcs ----
 
@@ -44,12 +60,16 @@ def parse_pb_name_data(file_name):
 
     """
 
-    extraction_date, itp_id, url_number, src_fname, *_ = Path(file_name).name.split("__")
+    extraction_date, itp_id, url_number, src_fname, *_ = Path(file_name).name.split(
+        "__"
+    )
     return dict(
-            extraction_date = extraction_date,
-            itp_id = int(itp_id),
-            url_number = int(url_number),
-            src_fname = src_fname)
+        extraction_date=extraction_date,
+        itp_id=int(itp_id),
+        url_number=int(url_number),
+        src_fname=src_fname,
+    )
+
 
 def build_pb_validator_name(extraction_date, itp_id, url_number, src_fname):
     """Return name for file in the format needed for validation.
@@ -63,8 +83,9 @@ def build_pb_validator_name(extraction_date, itp_id, url_number, src_fname):
         extraction_date=extraction_date,
         itp_id=itp_id,
         url_number=url_number,
-        src_fname=src_fname
+        src_fname=src_fname,
     )
+
 
 # Validation ==================================================================
 
@@ -75,7 +96,9 @@ def gather_results(rt_path):
     raise NotImplementedError()
 
 
+@app.command()
 def validate(gtfs_file, rt_path, verbose=False):
+    logger.info(f"validating {gtfs_file} and {rt_path}")
 
     if not isinstance(gtfs_file, str):
         raise NotImplementedError("gtfs_file must be a string")
@@ -83,19 +106,35 @@ def validate(gtfs_file, rt_path, verbose=False):
     stderr = subprocess.DEVNULL if not verbose else None
     stdout = subprocess.DEVNULL if not verbose else None
 
-    subprocess.check_call([
-        "java",
-        "-jar", JAR_PATH,
-        "-gtfs", gtfs_file,
-        "-gtfsRealtimePath", rt_path,
-        "-sort", "name",
-        ], stderr=stderr, stdout=stdout)
+    subprocess.check_call(
+        [
+            "java",
+            "-jar",
+            JAR_PATH,
+            "-gtfs",
+            gtfs_file,
+            "-gtfsRealtimePath",
+            rt_path,
+            "-sort",
+            "name",
+        ],
+        stderr=stderr,
+        stdout=stdout,
+    )
 
 
+@app.command()
 def validate_gcs_bucket(
-        project_id, token, gtfs_schedule_path, gtfs_rt_glob_path=None,
-        out_dir=None, results_bucket=None, verbose=False, aggregate_counts=False,
-        ):
+    project_id,
+    token,
+    gtfs_schedule_path,
+    gtfs_rt_glob_path: str = None,
+    out_dir: str = None,
+    results_bucket: str = None,
+    verbose: bool = False,
+    aggregate_counts: bool = False,
+    idx: int = None,
+):
     """
     Fetch and validate GTFS RT data held in a google cloud bucket.
 
@@ -108,14 +147,25 @@ def validate_gcs_bucket(
         out_dir: a directory to store fetched files and results in.
         results_bucket: a bucket path to copy results to.
         verbose: whether to print helpful messages along the way.
+        aggregate_counts: tbd
 
     Note that if out_dir is unspecified, the validation occurs in a temporary directory.
-        
+
     """
+    # TODO: get python 3.9
+    clear_threadlocal()
+    bind_threadlocal(
+        idx=idx,
+        gtfs_schedule_path=gtfs_schedule_path,
+        gtfs_rt_glob_path=gtfs_rt_glob_path,
+        out_dir=out_dir,
+        result_bucket=results_bucket,
+    )
+    logger.debug("entering validate_gcs_bucket")
 
-    import gcsfs
-
+    logger.debug("getting gcs file system")
     fs = gcsfs.GCSFileSystem(project_id, token=token)
+    logger.debug("got gcs file system")
 
     if not out_dir:
         tmp_dir = TemporaryDirectory()
@@ -130,8 +180,6 @@ def validate_gcs_bucket(
     final_json_dir = Path(tmp_dir_name) / "newline_json"
 
     try:
-        print("Fetching data")
-
         dst_path_gtfs = f"{tmp_dir_name}/gtfs"
         dst_path_rt = f"{tmp_dir_name}/rt"
 
@@ -142,13 +190,13 @@ def validate_gcs_bucket(
         if gtfs_rt_glob_path is None:
             raise ValueError("One of gtfs rt glob path or date must be specified")
 
+        num_files = download_rt_files(dst_path_rt, fs, glob_path=gtfs_rt_glob_path)
 
-        download_rt_files(dst_path_rt, fs, glob_path = gtfs_rt_glob_path)
-        print("Validating data")
+        logger.info(f"validating {num_files} files")
         validate(f"{dst_path_gtfs}.zip", dst_path_rt, verbose=verbose)
 
         if results_bucket and aggregate_counts:
-            print(f"Saving aggregate counts as: {results_bucket}")
+            logger.info(f"Saving aggregate counts as: {results_bucket}")
 
             error_counts = rollup_error_counts(dst_path_rt)
             df = pd.DataFrame(error_counts)
@@ -159,12 +207,11 @@ def validate_gcs_bucket(
 
         elif results_bucket and not aggregate_counts:
             # validator stores results as {filename}.results.json
-            print(f"Putting data into results bucket: {results_bucket}")
+            logger.info(f"Putting data into results bucket: {results_bucket}")
 
             # fetch all results files created by the validator
             all_results = list(Path(dst_path_rt).glob("*.results.json"))
 
-            
             final_json_dir.mkdir(exist_ok=True)
             final_files = []
             for result in all_results:
@@ -176,7 +223,6 @@ def validate_gcs_bucket(
 
                 json_to_newline_delimited(result, final_json_dir / result_out)
                 final_files.append(final_json_dir / result_out)
-            
 
             fs.put(final_files, results_bucket)
 
@@ -188,10 +234,19 @@ def validate_gcs_bucket(
             tmp_dir.cleanup()
 
 
+@app.command()
 def validate_gcs_bucket_many(
-    project_id, token, param_csv,
-    results_bucket=None, verbose=False, aggregate_counts=False,
-    status_result_path=None, strict=False, result_name_prefix="result_"
+    project_id: str = "cal-itp-data-infra",
+    token: str = None,  # "cloud",
+    param_csv: str = f"gs://gtfs-data-test/rt-processed/calitp_validation_params/{pendulum.today().to_date_string()}.csv",
+    results_bucket: str = "gs://calitp-py-ci/gtfs-rt-validator-api/test-pipeline",
+    verbose: bool = True,
+    aggregate_counts: bool = True,
+    status_result_path: str = "gs://calitp-py-ci/gtfs-rt-validator-api/test-pipeline/status.json",
+    strict: bool = False,
+    result_name_prefix: str = "result_",
+    threads: int = 1,
+    limit: int = None,
 ):
     """Validate many gcs buckets using a parameter file.
 
@@ -200,7 +255,7 @@ def validate_gcs_bucket_many(
         status_result_path: directory for saving the status of validations
         result_name_prefix: a name to prefix to each result file name. File names
             will be numbered. E.g. result_0.parquet, result_1.parquet for two feeds.
-        
+
 
     Param CSV should contain the following fields (passed to validate_gcs_bucket):
         * gtfs_schedule_path
@@ -215,46 +270,79 @@ def validate_gcs_bucket_many(
 
     required_cols = ["gtfs_schedule_path", "gtfs_rt_glob_path"]
 
+    logger.info(f"reading params from {param_csv}")
     fs = gcsfs.GCSFileSystem(project_id, token=token)
     params = pd.read_csv(fs.open(param_csv))
+
+    if limit:
+        logger.warn(f"limiting to {limit} rows")
+        params = params.iloc[:limit]
 
     # check that the parameters file has all required columns
     missing_cols = set(required_cols) - set(params.columns)
     if missing_cols:
         raise ValueError("parameter csv missing columns: %s" % missing_cols)
 
-    status = []
-    for idx, row in params.iterrows():
-        try:
-            validate_gcs_bucket(
+    statuses = []
+
+    logger.info(f"processing {params.shape[0]} inputs with {threads} threads")
+
+    # https://github.com/fsspec/gcsfs/issues/379#issuecomment-826887228
+    # Note that this seems to differ per OS
+    ctx = multiprocessing.get_context("spawn")
+
+    # from https://stackoverflow.com/a/55149491
+    # could be cleaned up a bit with a namedtuple
+    with ProcessPoolExecutor(max_workers=threads, mp_context=ctx) as pool:
+        futures = {
+            pool.submit(
+                validate_gcs_bucket,
                 project_id,
                 token,
-                results_bucket=results_bucket + f"/{result_name_prefix}{idx}.parquet",
                 verbose=verbose,
+                results_bucket=results_bucket + f"/{result_name_prefix}{idx}.parquet",
                 aggregate_counts=aggregate_counts,
-                **row[required_cols]
-            )
+                idx=idx,
+                **row[required_cols],
+            ): row
+            for idx, row in params.iterrows()
+        }
 
-            status.append({**row, "is_success": True})
-        except Exception as e:
-            if strict:
-                raise e
+        # Processes each future as it is completed, i.e. returned or errored
+        for future in concurrent.futures.as_completed(futures):
+            row = futures[future]
+            # result() will throw an exception if one occurred in the underlying function
+            try:
+                future.result()
+            except Exception as e:
+                if strict:
+                    raise e
+                statuses.append({**row, "is_success": False})
+            else:
+                statuses.append({**row, "is_success": True})
 
-            status.append({**row, "is_success": False})
-    
-    status_newline_json = "\n".join([json.dumps(record) for record in status])
+    successes = sum(s["is_success"] for s in statuses)
+
+    logger.info(f"finished multiprocessing; {successes} successful of {len(statuses)}")
+
+    status_newline_json = "\n".join([json.dumps(record) for record in statuses])
 
     if status_result_path:
-        fs.pipe(status_result_path, status_newline_json.encode()) 
+        fs.pipe(status_result_path, status_newline_json.encode())
 
 
 def download_gtfs_schedule_zip(gtfs_schedule_path, dst_path, fs):
     # fetch and zip gtfs schedule
+    logger.info(f"Fetching gtfs schedule data from {gtfs_schedule_path} to {dst_path}")
     fs.get(gtfs_schedule_path, dst_path, recursive=True)
+    try:
+        os.remove(os.path.join(dst_path, "areas.txt"))
+    except FileNotFoundError:
+        pass
     shutil.make_archive(dst_path, "zip", dst_path)
-    
 
-def download_rt_files(dst_dir, fs=None, date="2021-08-01", glob_path=None):
+
+def download_rt_files(dst_dir, fs=None, date="2021-08-01", glob_path=None) -> int:
     """Download all files for an GTFS RT feed (or multiple feeds)
 
     If date is specified, downloads daily data for all feeds. Otherwise, if
@@ -262,7 +350,7 @@ def download_rt_files(dst_dir, fs=None, date="2021-08-01", glob_path=None):
 
     Parameters:
         date: date of desired feeds to download data from (e.g. 2021-09-01)
-        glob_path: if specified, the path (including a wildcard) for downloading a 
+        glob_path: if specified, the path (including a wildcard) for downloading a
                    single feed.
 
     """
@@ -270,7 +358,11 @@ def download_rt_files(dst_dir, fs=None, date="2021-08-01", glob_path=None):
         raise NotImplementedError("Must specify fs")
 
     # {date}T{timestamp}/{itp_id}/{url_number}
-    all_files = fs.glob(glob_path) if glob_path else fs.glob(f"{RT_BUCKET_FOLDER}/{date}*/*/*/*")
+    all_files = (
+        fs.glob(glob_path)
+        if glob_path
+        else fs.glob(f"{RT_BUCKET_FOLDER}/{date}*/*/*/*")
+    )
 
     to_copy = []
     out_feeds = defaultdict(lambda: [])
@@ -291,10 +383,16 @@ def download_rt_files(dst_dir, fs=None, date="2021-08-01", glob_path=None):
         to_copy.append([src_path, dst_name])
         out_feeds[(itp_id, url_number)].append(dst_name)
 
-    print(f"Copying {len(to_copy)} files")
+    if not to_copy:
+        msg = "failed to find any rt files to download"
+        logger.warn(msg)
+        raise ValueError(msg)
+
+    logger.info(f"downloading {len(to_copy)} files with glob_path {glob_path}")
 
     src_files, dst_files = zip(*to_copy)
     fs.get(list(src_files), list(dst_files))
+    return len(to_copy)
 
 
 # Rectangling =================================================================
@@ -309,29 +407,19 @@ def rollup_error_counts(rt_dir):
 
         result_json = json.load(path.open())
         for entry in result_json:
-            code_counts.append({
-                "calitp_itp_id": metadata["itp_id"],
-                "calitp_url_number": metadata["url_number"],
-                "calitp_extracted_at": metadata["extraction_date"],
-                "rt_feed_type": metadata["src_fname"],
-                "error_id": entry["errorMessage"]["validationRule"]["errorId"],
-                "n_occurrences": len(entry["occurrenceList"])
-            })
+            code_counts.append(
+                {
+                    "calitp_itp_id": metadata["itp_id"],
+                    "calitp_url_number": metadata["url_number"],
+                    "calitp_extracted_at": metadata["extraction_date"],
+                    "rt_feed_type": metadata["src_fname"],
+                    "error_id": entry["errorMessage"]["validationRule"]["errorId"],
+                    "n_occurrences": len(entry["occurrenceList"]),
+                }
+            )
 
     return code_counts
 
 
-# Main ========================================================================
-
-def main():
-    # TODO: make into simple CLI
-    result = argh.dispatch_commands([
-        validate, validate_gcs_bucket
-        ])
-
-    if result is not None:
-        print(json.dumps(result))
-
-
 if __name__ == "__main__":
-    main()
+    app()

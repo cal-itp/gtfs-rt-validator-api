@@ -1,8 +1,13 @@
-from google.transit import gtfs_realtime_pb2
-from google.protobuf import json_format
-from pathlib import Path
-import pandas as pd
+"""
+NOTE: This is probably deprecated/unnecessary since we aren't rectangle-ing any RT data
+via Python/GCS; it's going in BigQuery
+"""
 import os
+from pathlib import Path
+
+import pandas as pd
+from google.protobuf import json_format
+from google.transit import gtfs_realtime_pb2
 
 
 def parse_pb(path):

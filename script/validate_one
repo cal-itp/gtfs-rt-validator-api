@@ -1,0 +1,17 @@
+#!/usr/bin/env python
+"""
+This is a quick way to execute validation against a single feed; does not require a params CSV
+"""
+
+from gtfs_rt_validator_api import validate_gcs_bucket
+
+validate_gcs_bucket(
+    project_id="cal-itp-data-infra",
+    token=None,
+    gtfs_schedule_path="gs://gtfs-data-test/schedule/2022-01-09T00:00:00+00:00/200_0",
+    gtfs_rt_glob_path="gtfs-data/rt/2022-01-09T00:00:*/200/0/*trip_updates*",
+    out_dir="test_itp_200",
+    # note that I've hard-coded an output bucket
+    results_bucket="gs://calitp-py-ci/test_itp_200",
+    verbose=True,
+)
