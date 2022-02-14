@@ -5,7 +5,7 @@ from gtfs_rt_validator_api import validate_gcs_bucket_many
 validate_gcs_bucket_many(
     project_id="cal-itp-data-infra",
     token="cloud",
-    param_csv="gs://gtfs-data-test/rt-processed/calitp_validation_params/{{execution_date.to_date_string()}}.csv",
+    param_csv="gs://gtfs-data-test/rt-processed/calitp_validation_params/2022-02-01.csv",
     results_bucket="gs://gtfs-data-test/gtfs-rt-validator-api/test-pipeline",
     verbose=True,
     aggregate_counts=True,
