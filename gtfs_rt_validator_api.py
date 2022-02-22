@@ -134,6 +134,8 @@ def validate_gcs_bucket(
     verbose: bool = False,
     aggregate_counts: bool = False,
     idx: int = None,
+    calitp_itp_id: int = None,
+    calitp_url_number: int = None,
 ):
     """
     Fetch and validate GTFS RT data held in a google cloud bucket.
@@ -239,12 +241,12 @@ def validate_gcs_bucket_many(
     project_id: str = "cal-itp-data-infra",
     token: str = None,  # "cloud",
     param_csv: str = f"gs://gtfs-data-test/rt-processed/calitp_validation_params/{pendulum.today().to_date_string()}.csv",
-    results_bucket: str = "gs://calitp-py-ci/gtfs-rt-validator-api/test-pipeline",
+    results_bucket: str = f"gs://gtfs-data-test/rt-processed/validation/{pendulum.today().to_date_string()}",
     verbose: bool = True,
     aggregate_counts: bool = True,
-    status_result_path: str = "gs://calitp-py-ci/gtfs-rt-validator-api/test-pipeline/status.json",
+    status_result_path: str = f"gs://gtfs-data-test/rt-processed/validation/{pendulum.today().to_date_string()}/status.json",
     strict: bool = False,
-    result_name_prefix: str = "result_",
+    result_name_prefix: str = "validation_results_",
     threads: int = 1,
     limit: int = None,
 ):
@@ -268,7 +270,12 @@ def validate_gcs_bucket_many(
 
     import gcsfs
 
-    required_cols = ["gtfs_schedule_path", "gtfs_rt_glob_path"]
+    required_cols = [
+        "calitp_itp_id",
+        "calitp_url_number",
+        "gtfs_schedule_path",
+        "gtfs_rt_glob_path",
+    ]
 
     logger.info(f"reading params from {param_csv}")
     fs = gcsfs.GCSFileSystem(project_id, token=token)
@@ -300,7 +307,8 @@ def validate_gcs_bucket_many(
                 project_id,
                 token,
                 verbose=verbose,
-                results_bucket=results_bucket + f"/{result_name_prefix}{idx}.parquet",
+                results_bucket=results_bucket
+                + f"/{result_name_prefix}_{row['calitp_itp_id']}_{row['calitp_url_number']}.parquet",
                 aggregate_counts=aggregate_counts,
                 idx=idx,
                 **row[required_cols],
