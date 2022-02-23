@@ -150,6 +150,8 @@ def validate_gcs_bucket(
         results_bucket: a bucket path to copy results to.
         verbose: whether to print helpful messages along the way.
         aggregate_counts: tbd
+        calitp_itp_id: not needed, but lazy way to accept a full row
+        calitp_url_number: not needed, but lazy way to accept a full row
 
     Note that if out_dir is unspecified, the validation occurs in a temporary directory.
 
