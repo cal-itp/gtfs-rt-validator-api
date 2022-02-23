@@ -134,8 +134,6 @@ def validate_gcs_bucket(
     verbose: bool = False,
     aggregate_counts: bool = False,
     idx: int = None,
-    calitp_itp_id: int = None,
-    calitp_url_number: int = None,
 ):
     """
     Fetch and validate GTFS RT data held in a google cloud bucket.
@@ -150,8 +148,6 @@ def validate_gcs_bucket(
         results_bucket: a bucket path to copy results to.
         verbose: whether to print helpful messages along the way.
         aggregate_counts: tbd
-        calitp_itp_id: not needed, but lazy way to accept a full row
-        calitp_url_number: not needed, but lazy way to accept a full row
 
     Note that if out_dir is unspecified, the validation occurs in a temporary directory.
 
@@ -313,7 +309,8 @@ def validate_gcs_bucket_many(
                 + f"/{result_name_prefix}_{row['calitp_itp_id']}_{row['calitp_url_number']}.parquet",
                 aggregate_counts=aggregate_counts,
                 idx=idx,
-                **row[required_cols],
+                gtfs_schedule_path=row["gtfs_schedule_path"],
+                gtfs_rt_glob_path=row["gtfs_rt_glob_path"],
             ): row
             for idx, row in params.iterrows()
         }
