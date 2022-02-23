@@ -273,6 +273,7 @@ def validate_gcs_bucket_many(
         "calitp_url_number",
         "gtfs_schedule_path",
         "gtfs_rt_glob_path",
+        "output_file_suffix",
     ]
 
     logger.info(f"reading params from {param_csv}")
@@ -306,7 +307,7 @@ def validate_gcs_bucket_many(
                 token,
                 verbose=verbose,
                 results_bucket=results_bucket
-                + f"/{result_name_prefix}_{row['calitp_itp_id']}_{row['calitp_url_number']}.parquet",
+                + f"/{result_name_prefix}_{row['calitp_itp_id']}_{row['calitp_url_number']}_{row['output_file_suffix']}.parquet",
                 aggregate_counts=aggregate_counts,
                 idx=idx,
                 gtfs_schedule_path=row["gtfs_schedule_path"],
