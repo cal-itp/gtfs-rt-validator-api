@@ -16,6 +16,7 @@ import pandas as pd
 import pendulum
 import structlog as structlog
 import typer
+from calitp.config import get_bucket
 from structlog import configure
 from structlog.threadlocal import bind_threadlocal, clear_threadlocal, merge_threadlocal
 
@@ -238,13 +239,13 @@ def validate_gcs_bucket(
 def validate_gcs_bucket_many(
     project_id: str = "cal-itp-data-infra",
     token: str = None,  # "cloud",
-    param_csv: str = f"gs://gtfs-data-test/rt-processed/calitp_validation_params/{pendulum.today().to_date_string()}.csv",
-    results_bucket: str = "gs://calitp-py-ci/gtfs-rt-validator-api/test-pipeline",
+    param_csv: str = f"{get_bucket()}/rt-processed/calitp_validation_params/{pendulum.today().to_date_string()}.csv",
+    results_bucket: str = f"{get_bucket()}/rt-processed/validation/{pendulum.today().to_date_string()}",
     verbose: bool = True,
     aggregate_counts: bool = True,
-    status_result_path: str = "gs://calitp-py-ci/gtfs-rt-validator-api/test-pipeline/status.json",
+    summary_path: str = f"{get_bucket()}/rt-processed/validation/{pendulum.today().to_date_string()}/summary.json",
     strict: bool = False,
-    result_name_prefix: str = "result_",
+    result_name_prefix: str = "validation_results",
     threads: int = 1,
     limit: int = None,
 ):
@@ -252,7 +253,7 @@ def validate_gcs_bucket_many(
 
     Additional Arguments:
         strict: whether to raise an error when a validation fails
-        status_result_path: directory for saving the status of validations
+        summary_path: directory for saving the status of validations
         result_name_prefix: a name to prefix to each result file name. File names
             will be numbered. E.g. result_0.parquet, result_1.parquet for two feeds.
 
@@ -268,7 +269,13 @@ def validate_gcs_bucket_many(
 
     import gcsfs
 
-    required_cols = ["gtfs_schedule_path", "gtfs_rt_glob_path"]
+    required_cols = [
+        "calitp_itp_id",
+        "calitp_url_number",
+        "gtfs_schedule_path",
+        "gtfs_rt_glob_path",
+        "output_filename",
+    ]
 
     logger.info(f"reading params from {param_csv}")
     fs = gcsfs.GCSFileSystem(project_id, token=token)
@@ -300,10 +307,13 @@ def validate_gcs_bucket_many(
                 project_id,
                 token,
                 verbose=verbose,
-                results_bucket=results_bucket + f"/{result_name_prefix}{idx}.parquet",
+                # TODO: os.path.join() would be better probably
+                results_bucket=results_bucket
+                + f"/{result_name_prefix}/{row['calitp_itp_id']}/{row['calitp_url_number']}/{row['output_filename']}.parquet",
                 aggregate_counts=aggregate_counts,
                 idx=idx,
-                **row[required_cols],
+                gtfs_schedule_path=row["gtfs_schedule_path"],
+                gtfs_rt_glob_path=row["gtfs_rt_glob_path"],
             ): row
             for idx, row in params.iterrows()
         }
@@ -317,7 +327,7 @@ def validate_gcs_bucket_many(
             except Exception as e:
                 if strict:
                     raise e
-                statuses.append({**row, "is_success": False})
+                statuses.append({**row, "is_success": False, "exc": str(e)})
             else:
                 statuses.append({**row, "is_success": True})
 
@@ -325,10 +335,10 @@ def validate_gcs_bucket_many(
 
     logger.info(f"finished multiprocessing; {successes} successful of {len(statuses)}")
 
-    status_newline_json = "\n".join([json.dumps(record) for record in statuses])
+    summary_ndjson = "\n".join([json.dumps(record) for record in statuses])
 
-    if status_result_path:
-        fs.pipe(status_result_path, status_newline_json.encode())
+    if summary_path:
+        fs.pipe(summary_path, summary_ndjson.encode())
 
 
 def download_gtfs_schedule_zip(gtfs_schedule_path, dst_path, fs):

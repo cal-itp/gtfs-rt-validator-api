@@ -121,10 +121,11 @@ def test_validate_gcs_bucket_many(tmp_gcs_dir):
             results_bucket=tmp_gcs_dir,
             verbose=True,
             aggregate_counts=True,
-            status_result_path=tmp_gcs_dir + "/status.json",
+            summary_path=tmp_gcs_dir + "/status.json",
+            strict=True,
         )
 
-    fname = f"{tmp_gcs_dir}/result_0.parquet"
+    fname = f"{tmp_gcs_dir}/validation_results/126/0/everything.parquet"
     df = pd.read_parquet(fs.open(fname))
 
     assert (df.calitp_itp_id == 126).all()
@@ -146,14 +147,15 @@ def test_validate_gcs_bucket_many_25(tmp_gcs_dir):
             results_bucket=tmp_gcs_dir,
             verbose=True,
             aggregate_counts=True,
-            status_result_path=tmp_gcs_dir + "/status.json",
+            summary_path=tmp_gcs_dir + "/status.json",
+            threads=4,
         )
 
     fs = get_fs()
-    gcs_files = fs.ls(tmp_gcs_dir)
+    gcs_files = fs.glob(tmp_gcs_dir + "/validation_results/*/*/everything.parquet")
 
     # check that bucket contains the 24 rollups and a status.json
-    assert len([x for x in gcs_files if "result" in x]) == 24
+    assert len([x for x in gcs_files if "everything" in x]) == 24
 
     # check that 1 failed feed is in status
     status = pd.read_json(tmp_gcs_dir + "/status.json", lines=True)
@@ -161,7 +163,7 @@ def test_validate_gcs_bucket_many_25(tmp_gcs_dir):
     assert len(status[~status.is_success]) == 1
 
     # check 1 result file
-    fname = f"{tmp_gcs_dir}/result_0.parquet"
+    fname = f"{tmp_gcs_dir}/validation_results/106/0/everything.parquet"
     df = pd.read_parquet(fs.open(fname))
 
     assert (df.calitp_itp_id == 106).all()
