@@ -246,7 +246,7 @@ def validate_gcs_bucket_many(
     aggregate_counts: bool = True,
     status_result_path: str = f"gs://gtfs-data-test/rt-processed/validation/{pendulum.today().to_date_string()}/status.json",
     strict: bool = False,
-    result_name_prefix: str = "validation_results_",
+    result_name_prefix: str = "validation_results",
     threads: int = 1,
     limit: int = None,
 ):
@@ -325,7 +325,7 @@ def validate_gcs_bucket_many(
             except Exception as e:
                 if strict:
                     raise e
-                statuses.append({**row, "is_success": False})
+                statuses.append({**row, "is_success": False, "exc": str(e)})
             else:
                 statuses.append({**row, "is_success": True})
 

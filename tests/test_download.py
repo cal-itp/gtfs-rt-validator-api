@@ -122,9 +122,10 @@ def test_validate_gcs_bucket_many(tmp_gcs_dir):
             verbose=True,
             aggregate_counts=True,
             status_result_path=tmp_gcs_dir + "/status.json",
+            strict=True,
         )
 
-    fname = f"{tmp_gcs_dir}/result_0.parquet"
+    fname = f"{tmp_gcs_dir}/validation_results_126_0.parquet"
     df = pd.read_parquet(fs.open(fname))
 
     assert (df.calitp_itp_id == 126).all()
@@ -147,6 +148,7 @@ def test_validate_gcs_bucket_many_25(tmp_gcs_dir):
             verbose=True,
             aggregate_counts=True,
             status_result_path=tmp_gcs_dir + "/status.json",
+            threads=4,
         )
 
     fs = get_fs()
@@ -161,7 +163,7 @@ def test_validate_gcs_bucket_many_25(tmp_gcs_dir):
     assert len(status[~status.is_success]) == 1
 
     # check 1 result file
-    fname = f"{tmp_gcs_dir}/result_0.parquet"
+    fname = f"{tmp_gcs_dir}/validation_results_106_0.parquet"
     df = pd.read_parquet(fs.open(fname))
 
     assert (df.calitp_itp_id == 106).all()
