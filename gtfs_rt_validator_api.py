@@ -16,6 +16,7 @@ import pandas as pd
 import pendulum
 import structlog as structlog
 import typer
+from calitp.config import get_bucket
 from structlog import configure
 from structlog.threadlocal import bind_threadlocal, clear_threadlocal, merge_threadlocal
 
@@ -238,11 +239,11 @@ def validate_gcs_bucket(
 def validate_gcs_bucket_many(
     project_id: str = "cal-itp-data-infra",
     token: str = None,  # "cloud",
-    param_csv: str = f"gs://gtfs-data-test/rt-processed/calitp_validation_params/{pendulum.today().to_date_string()}.csv",
-    results_bucket: str = f"gs://gtfs-data-test/rt-processed/validation/{pendulum.today().to_date_string()}",
+    param_csv: str = f"{get_bucket()}/rt-processed/calitp_validation_params/{pendulum.today().to_date_string()}.csv",
+    results_bucket: str = f"{get_bucket()}/rt-processed/validation/{pendulum.today().to_date_string()}",
     verbose: bool = True,
     aggregate_counts: bool = True,
-    status_result_path: str = f"gs://gtfs-data-test/rt-processed/validation/{pendulum.today().to_date_string()}/status.json",
+    status_result_path: str = f"{get_bucket()}/rt-processed/validation/{pendulum.today().to_date_string()}/status.json",
     strict: bool = False,
     result_name_prefix: str = "validation_results",
     threads: int = 1,
