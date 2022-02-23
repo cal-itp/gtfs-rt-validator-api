@@ -34,7 +34,7 @@ def tmp_gcs_dir():
     yield dir_name
 
     # clean up by removing directory ----
-    # fs.rm(dir_name, recursive=True)
+    fs.rm(dir_name, recursive=True)
 
 
 def list_results(dir_name):
