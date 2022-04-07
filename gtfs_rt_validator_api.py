@@ -1,4 +1,4 @@
-__version__ = "0.0.3"
+__version__ = "0.0.5"
 
 import concurrent
 import json
@@ -6,6 +6,7 @@ import multiprocessing
 import os
 import shutil
 import subprocess
+import traceback
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -184,14 +185,14 @@ def validate_gcs_bucket(
         dst_path_gtfs = f"{tmp_dir_name}/gtfs"
         dst_path_rt = f"{tmp_dir_name}/rt"
 
-        # fetch and zip gtfs schedule
-        download_gtfs_schedule_zip(gtfs_schedule_path, dst_path_gtfs, fs)
-
         # fetch rt data
         if gtfs_rt_glob_path is None:
             raise ValueError("One of gtfs rt glob path or date must be specified")
 
         num_files = download_rt_files(dst_path_rt, fs, glob_path=gtfs_rt_glob_path)
+
+        # fetch and zip gtfs schedule
+        download_gtfs_schedule_zip(gtfs_schedule_path, dst_path_gtfs, fs)
 
         logger.info(f"validating {num_files} files")
         validate(f"{dst_path_gtfs}.zip", dst_path_rt, verbose=verbose)
@@ -200,11 +201,13 @@ def validate_gcs_bucket(
             logger.info(f"Saving aggregate counts as: {results_bucket}")
 
             error_counts = rollup_error_counts(dst_path_rt)
-            df = pd.DataFrame(error_counts)
 
-            with NamedTemporaryFile() as tmp_file:
-                df.to_parquet(tmp_file.name)
-                fs.put(tmp_file.name, results_bucket)
+            if error_counts:
+                df = pd.DataFrame(error_counts)
+
+                with NamedTemporaryFile() as tmp_file:
+                    df.to_parquet(tmp_file.name)
+                    fs.put(tmp_file.name, results_bucket)
 
         elif results_bucket and not aggregate_counts:
             # validator stores results as {filename}.results.json
@@ -228,6 +231,7 @@ def validate_gcs_bucket(
             fs.put(final_files, results_bucket)
 
     except Exception as e:
+        typer.echo(f"got exception during validation: {traceback.format_exc()}")
         raise e
 
     finally:

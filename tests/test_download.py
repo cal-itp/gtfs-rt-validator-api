@@ -52,7 +52,9 @@ def test_validation_manual():
         )
 
         download_rt_files(
-            dir_rt, fs, glob_path=f"{GCS_BASE_DIR}/gtfs_rt_126/*/126/0/*",
+            dir_rt,
+            fs,
+            glob_path=f"{GCS_BASE_DIR}/gtfs_rt_126/*/126/0/*",
         )
 
         print("validating")
