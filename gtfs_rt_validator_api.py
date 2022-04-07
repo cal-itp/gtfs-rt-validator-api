@@ -185,14 +185,14 @@ def validate_gcs_bucket(
         dst_path_gtfs = f"{tmp_dir_name}/gtfs"
         dst_path_rt = f"{tmp_dir_name}/rt"
 
-        # fetch and zip gtfs schedule
-        download_gtfs_schedule_zip(gtfs_schedule_path, dst_path_gtfs, fs)
-
         # fetch rt data
         if gtfs_rt_glob_path is None:
             raise ValueError("One of gtfs rt glob path or date must be specified")
 
         num_files = download_rt_files(dst_path_rt, fs, glob_path=gtfs_rt_glob_path)
+
+        # fetch and zip gtfs schedule
+        download_gtfs_schedule_zip(gtfs_schedule_path, dst_path_gtfs, fs)
 
         logger.info(f"validating {num_files} files")
         validate(f"{dst_path_gtfs}.zip", dst_path_rt, verbose=verbose)
