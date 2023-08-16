@@ -1,3 +1,5 @@
+DEPRECATED: this repo/image are replaced by https://github.com/cal-itp/data-infra/tree/main/jobs/gtfs-rt-parser-v2
+
 # GTFS RT Validator API
 
 This library wraps [CUTR-at-USF/gtfs-realtime-validator](https://github.com/CUTR-at-USF/gtfs-realtime-validator),
