@@ -1,4 +1,4 @@
-DEPRECATED: this repo/image are replaced by https://github.com/cal-itp/data-infra/tree/main/jobs/gtfs-rt-parser-v2
+# DEPRECATED: this repo/image are replaced by https://github.com/cal-itp/data-infra/tree/main/jobs/gtfs-rt-parser-v2
 
 # GTFS RT Validator API
 
