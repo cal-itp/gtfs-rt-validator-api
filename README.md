@@ -1,4 +1,6 @@
-# DEPRECATED: this repo/image are replaced by https://github.com/cal-itp/data-infra/tree/main/jobs/gtfs-rt-parser-v2
+> [!CAUTION]
+> # $\color{Red}{\textsf{DEPRECATED}}$
+> ## This repo/image were replaced by [gtfs-rt-parser](https://github.com/cal-itp/data-infra/tree/main/airflow/plugins/scripts)
 
 # GTFS RT Validator API
 
